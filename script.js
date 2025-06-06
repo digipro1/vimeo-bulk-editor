@@ -51,7 +51,7 @@ async function runApplication() {
 // --- ALL ORIGINAL APPLICATION CODE REMAINS UNCHANGED BELOW ---
 
 // --- CONFIGURATION ---
-const PROXY_URL = 'https://vimeo-data-editor.netlify.app/';
+const PROXY_URL = 'https://vimeo-data-editor.netlify.app';
 
 // --- DATA FETCHING FUNCTIONS ---
 async function fetchFolders() {
