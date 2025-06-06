@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vimeo Bulk Data Editor</title>
+    <link rel="stylesheet" href="style.css">
+
+    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+
+    <div data-netlify-identity-button></div>
+
+    <header>
+        <h1>Vimeo Bulk Data Editor 🎬</h1>
+        <p>Load, edit, and save video metadata for your Vimeo account.</p>
+    </header>
+
+    <main id="app-container" style="display: none;">
+        <div id="loader" class="loader">Loading your videos...</div>
+
+        <div id="folders-container"></div>
+    </main>
+
+    <script src="script.js"></script>
+
+</body>
+</html>
