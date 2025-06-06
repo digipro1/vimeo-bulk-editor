@@ -1,40 +1,19 @@
 // --- NETLIFY IDENTITY AUTHENTICATION GATE ---
-
-// Listen for the 'init' event which fires when the widget has initialized
 window.netlifyIdentity.on('init', user => {
-    // If no user is logged in, we set up a listener for the 'login' event.
-    // The main app remains hidden.
     if (!user) {
-        window.netlifyIdentity.on('login', () => {
-            // When the user logs in, we redirect them to the same page.
-            // This re-triggers the 'init' event with an authenticated user.
-            document.location.href = "/";
-        });
+        window.netlifyIdentity.on('login', () => { document.location.href = "/"; });
     } else {
-        // If a user is already logged in, we show the main app container
-        // and immediately run our application logic.
         console.log('Authenticated user found:', user.email);
         document.getElementById('app-container').style.display = 'block';
         runApplication();
     }
 });
-
-// Set up a listener for when the user logs out
-window.netlifyIdentity.on('logout', () => {
-    // When the user logs out, redirect them to the base page.
-    // This will hide the app and show the 'Login' button again.
-    document.location.href = "/";
-});
+window.netlifyIdentity.on('logout', () => { document.location.href = "/"; });
 
 
-/**
- * The main function that contains all of our application logic.
- * This function is now only called AFTER a user is successfully authenticated.
- */
 async function runApplication() {
     const loader = document.getElementById('loader');
     const foldersContainer = document.getElementById('folders-container');
-
     try {
         loader.style.display = 'block';
         const [folders, videos] = await Promise.all([fetchFolders(), fetchAllVideos()]);
@@ -48,14 +27,14 @@ async function runApplication() {
     }
 }
 
-// --- ALL ORIGINAL APPLICATION CODE REMAINS UNCHANGED BELOW ---
-
 // --- CONFIGURATION ---
 const PROXY_URL = 'https://vimeo-data-editor.netlify.app';
+const VIMEO_USER_ID = '183962336'; // Your specific Vimeo User ID
 
 // --- DATA FETCHING FUNCTIONS ---
 async function fetchFolders() {
-    const response = await fetch(`${PROXY_URL}/me/projects?per_page=100`);
+    // Using the specific user endpoint instead of /me
+    const response = await fetch(`${PROXY_URL}/users/${VIMEO_USER_ID}/projects?per_page=100`);
     if (!response.ok) throw new Error('Could not fetch folders.');
     const data = await response.json();
     return data.data;
@@ -63,13 +42,23 @@ async function fetchFolders() {
 
 async function fetchAllVideos() {
     let videos = [];
-    let nextPageUrl = `${PROXY_URL}/me/videos?fields=uri,name,description,tags,parent_folder,pictures&per_page=100`;
+    // Using the specific user endpoint instead of /me
+    let nextPageUrl = `${PROXY_URL}/users/${VIMEO_USER_ID}/videos?fields=uri,name,description,tags,parent_folder,pictures&per_page=100`;
     while (nextPageUrl) {
         const response = await fetch(nextPageUrl);
-        if (!response.ok) throw new Error('Could not fetch videos.');
+        if (!response.ok) {
+            // Throw a more specific error based on the response status
+            throw new Error(`Could not fetch videos. Status: ${response.status} ${response.statusText}`);
+        }
         const pageData = await response.json();
         videos = videos.concat(pageData.data);
-        nextPageUrl = pageData.paging.next ? `${PROXY_URL}${pageData.paging.next}` : null;
+        
+        // The paging.next from Vimeo is a full path, so we need to rebuild the proxy URL
+        if (pageData.paging.next) {
+            nextPageUrl = `${PROXY_URL}${pageData.paging.next}`;
+        } else {
+            nextPageUrl = null;
+        }
     }
     return videos;
 }
