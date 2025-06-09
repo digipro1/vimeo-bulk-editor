@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vimeo Bulk Editor</title>
-    <script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -42,22 +41,6 @@
             </table>
         </div>
     </main>
-
-    <div id="description-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Edit Description</h2>
-                <button id="modal-close-btn" class="modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <textarea id="tinymce-textarea"></textarea>
-            </div>
-            <div class="modal-footer">
-                <button id="modal-cancel-btn" class="btn-secondary">Cancel</button>
-                <button id="modal-save-btn" class="btn-primary">Save Changes</button>
-            </div>
-        </div>
-    </div>
 
     <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
     <script src="app.js"></script>
