@@ -8,20 +8,25 @@ const manageFolderBtn = document.getElementById('manage-folder-btn');
 const bulkEditBar = document.getElementById('bulk-edit-bar');
 const selectionCounter = document.getElementById('selection-counter');
 const selectAllCheckbox = document.getElementById('select-all-checkbox');
+const applyBulkEditBtn = document.getElementById('apply-bulk-edit-btn');
+
 
 let currentUser = null;
 let originalVideoData = new Map();
-let selectedVideoIds = new Set(); // Re-add set for selected videos
+let selectedVideoIds = new Set(); 
 
-// --- RENDER TABLE (FIXED) ---
-// Restores the checkbox column and correctly adds event listeners.
 const renderTable = (videos) => {
     videoTbody.innerHTML = '';
     originalVideoData.clear();
     saveAllBtn.style.display = 'none';
     manageFolderBtn.style.display = 'none';
+    
+    // Check if the restored bulk edit bar exists before trying to hide it
+    if(bulkEditBar) {
+        bulkEditBar.style.display = 'none';
+    }
 
-    // **FIX**: The colspan should be 8 to match the header.
+
     if (videos.length === 0) {
         videoTbody.innerHTML = '<tr><td colspan="8">No videos found in this folder.</td></tr>';
         return;
@@ -40,7 +45,6 @@ const renderTable = (videos) => {
         row.dataset.videoId = videoId;
         const privacyDropdown = `<select class="privacy-select">${privacyOptions.map(opt => `<option value="${opt}" ${video.privacy.view === opt ? 'selected' : ''}>${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`).join('')}</select>`;
         
-        // **FIX**: The checkbox <td> is now restored at the beginning of the row.
         row.innerHTML = `
             <td><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
             <td class="video-title" contenteditable="true">${video.name || ''}</td>
@@ -52,89 +56,14 @@ const renderTable = (videos) => {
             <td><button class="save-btn">Save</button></td>
         `;
         videoTbody.appendChild(row);
-        // Add listeners for the row's save button and new checkbox
         row.querySelector('.save-btn').addEventListener('click', (e) => handleSave(e, currentUser));
         row.querySelector('.video-checkbox').addEventListener('change', handleSelectionChange);
     });
 
     saveAllBtn.style.display = 'inline-block';
     manageFolderBtn.style.display = 'inline-block';
-    // Clear any previous selections and update the bulk edit UI
     selectedVideoIds.clear();
     updateBulkEditUI();
-};
-
-
-// --- FETCH VIDEOS BY FOLDER (FIXED) ---
-// Corrects the colspan to 8 for loading messages.
-const fetchVideosByFolder = async () => {
-    const selectedFolderUri = folderFilter.value;
-    if (!selectedFolderUri) {
-        tableContainer.style.display = 'none';
-        videoTbody.innerHTML = '';
-        saveAllBtn.style.display = 'none';
-        manageFolderBtn.style.display = 'none';
-        return;
-    }
-
-    tableContainer.style.display = 'block';
-    // **FIX**: The colspan should be 8 to match the header.
-    videoTbody.innerHTML = `<tr><td colspan="8">Fetching videos from folder...</td></tr>`;
-    folderFilter.disabled = true;
-    saveAllBtn.style.display = 'none';
-    manageFolderBtn.style.display = 'none';
-
-    try {
-        const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
-            headers: { Authorization: `Bearer ${currentUser.token.access_token}` },
-        });
-        if (!response.ok) throw new Error((await response.json()).error);
-        const { data } = await response.json();
-        renderTable(data);
-    } catch (error) {
-        videoTbody.innerHTML = `<tr><td colspan="8" style="color: red;">Error: ${error.message}</td></tr>`;
-    } finally {
-        folderFilter.disabled = false;
-    }
-};
-
-// --- All other functions (fetchFolders, handleSave, etc.) are included below ---
-// --- They are the same as the versions that included the bulk edit logic. ---
-
-const fetchFolders = async (user) => {
-    try {
-        let allFolders = [];
-        let nextPagePath = null;
-        do {
-            const fetchUrl = nextPagePath ? `/api/get-folders?page=${encodeURIComponent(nextPagePath)}` : '/api/get-folders';
-            const response = await fetch(fetchUrl, { headers: { Authorization: `Bearer ${user.token.access_token}` } });
-            if (!response.ok) throw new Error((await response.json()).error);
-            const pageData = await response.json();
-            allFolders = allFolders.concat(pageData.folders);
-            nextPagePath = pageData.nextPagePath;
-        } while (nextPagePath);
-        folderFilter.innerHTML = '';
-        const defaultOption = document.createElement('option');
-        defaultOption.value = "";
-        defaultOption.textContent = "Select a folder...";
-        defaultOption.selected = true;
-        defaultOption.disabled = true;
-        folderFilter.appendChild(defaultOption);
-        if (allFolders.length > 0) {
-            allFolders.sort((a, b) => a.name.localeCompare(b.name));
-            allFolders.forEach(folder => {
-                const option = document.createElement('option');
-                option.value = folder.uri;
-                option.textContent = folder.name;
-                option.dataset.link = folder.link; 
-                folderFilter.appendChild(option);
-            });
-        }
-        folderFilter.disabled = false;
-    } catch (error) {
-        folderFilter.innerHTML = `<option>Error loading folders</option>`;
-        console.error(error);
-    }
 };
 
 const handleSave = async (event, user) => {
@@ -144,10 +73,18 @@ const handleSave = async (event, user) => {
     saveButton.textContent = 'Saving...';
     saveButton.disabled = true;
     const selectedPrivacy = row.querySelector('.privacy-select').value;
+    
+    // **THE FIX IS HERE**: Clean the tags string before sending it.
+    const cleanTags = row.querySelector('.video-tags').textContent
+        .split(',')
+        .map(tag => tag.trim()) // Remove leading/trailing whitespace
+        .filter(Boolean) // Remove any empty tags that result from extra commas
+        .join(',');
+
     const updates = {
         name: row.querySelector('.video-title').textContent,
         description: row.querySelector('.video-description').textContent,
-        tags: row.querySelector('.video-tags').textContent,
+        tags: cleanTags,
         privacy: { view: selectedPrivacy }
     };
     try {
@@ -168,7 +105,77 @@ const handleSave = async (event, user) => {
     }
 };
 
-// All the bulk edit logic is now restored
+const fetchVideosByFolder = async () => {
+    const selectedFolderUri = folderFilter.value;
+    if (!selectedFolderUri) {
+        tableContainer.style.display = 'none';
+        videoTbody.innerHTML = '';
+        saveAllBtn.style.display = 'none';
+        manageFolderBtn.style.display = 'none';
+        if(bulkEditBar) bulkEditBar.style.display = 'none';
+        return;
+    }
+
+    tableContainer.style.display = 'block';
+    videoTbody.innerHTML = `<tr><td colspan="8">Fetching videos from folder...</td></tr>`;
+    folderFilter.disabled = true;
+    saveAllBtn.style.display = 'none';
+    manageFolderBtn.style.display = 'none';
+    if(bulkEditBar) bulkEditBar.style.display = 'none';
+
+
+    try {
+        const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
+            headers: { Authorization: `Bearer ${currentUser.token.access_token}` },
+        });
+        if (!response.ok) throw new Error((await response.json()).error);
+        const { data } = await response.json();
+        renderTable(data);
+    } catch (error) {
+        videoTbody.innerHTML = `<tr><td colspan="8" style="color: red;">Error: ${error.message}</td></tr>`;
+    } finally {
+        folderFilter.disabled = false;
+    }
+};
+
+const fetchFolders = async (user) => {
+    try {
+        let allFolders = [];
+        let nextPagePath = null;
+        do {
+            const fetchUrl = nextPagePath ? `/api/get-folders?page=${encodeURIComponent(nextPagePath)}` : '/api/get-folders';
+            const response = await fetch(fetchUrl, { headers: { Authorization: `Bearer ${user.token.access_token}` } });
+            if (!response.ok) throw new Error((await response.json()).error);
+            const pageData = await response.json();
+            allFolders = allFolders.concat(pageData.folders);
+            nextPagePath = pageData.nextPagePath;
+        } while (nextPagePath);
+
+        folderFilter.innerHTML = '';
+        const defaultOption = document.createElement('option');
+        defaultOption.value = "";
+        defaultOption.textContent = "Select a folder...";
+        defaultOption.selected = true;
+        defaultOption.disabled = true;
+        folderFilter.appendChild(defaultOption);
+
+        if (allFolders.length > 0) {
+            allFolders.sort((a, b) => a.name.localeCompare(b.name));
+            allFolders.forEach(folder => {
+                const option = document.createElement('option');
+                option.value = folder.uri;
+                option.textContent = folder.name;
+                option.dataset.link = folder.link; 
+                folderFilter.appendChild(option);
+            });
+        }
+        folderFilter.disabled = false;
+    } catch (error) {
+        folderFilter.innerHTML = `<option>Error loading folders</option>`;
+        console.error(error);
+    }
+};
+
 const updateBulkEditUI = () => {
     const selectedCount = selectedVideoIds.size;
     if (selectedCount > 0) {
@@ -195,24 +202,33 @@ const handleSelectionChange = (event) => {
 const handleSaveAll = async () => {
     const changedRows = [];
     const allRows = videoTbody.querySelectorAll('tr');
+
     allRows.forEach(row => {
         const videoId = row.dataset.videoId;
         if (!videoId) return;
+
         const original = originalVideoData.get(videoId);
+        
+        // **THE FIX IS HERE**: Also clean the tags during the comparison.
+        const currentCleanTags = row.querySelector('.video-tags').textContent.split(',').map(tag => tag.trim()).filter(Boolean).join(',');
+
         const current = {
             name: row.querySelector('.video-title').textContent,
             description: row.querySelector('.video-description').textContent,
-            tags: row.querySelector('.video-tags').textContent,
+            tags: currentCleanTags,
             privacy: row.querySelector('.privacy-select').value,
         };
+
         if (original.name !== current.name || original.description !== current.description || original.tags !== current.tags || original.privacy !== current.privacy) {
             changedRows.push({ videoId, updates: { name: current.name, description: current.description, tags: current.tags, privacy: { view: current.privacy } } });
         }
     });
+
     if (changedRows.length === 0) {
         alert('No changes to save.');
         return;
     }
+
     saveAllBtn.textContent = 'Saving...';
     saveAllBtn.disabled = true;
     folderFilter.disabled = true;
@@ -258,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const allCheckboxes = document.querySelectorAll('.video-checkbox');
         allCheckboxes.forEach(checkbox => {
             checkbox.checked = selectAllCheckbox.checked;
-            handleSelectionChange({ target: checkbox }); // Manually trigger change handler
+            handleSelectionChange({ target: checkbox });
         });
     });
 
@@ -273,7 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tableContainer.style.display = 'none';
         saveAllBtn.style.display = 'none';
         manageFolderBtn.style.display = 'none';
-        bulkEditBar.style.display = 'none';
+        if (bulkEditBar) bulkEditBar.style.display = 'none';
     });
     const user = netlifyIdentity.currentUser();
     if (user) {
