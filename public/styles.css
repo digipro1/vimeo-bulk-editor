@@ -265,3 +265,26 @@ td[contenteditable="true"]:focus {
     background-color: #B0BEC5;
     cursor: not-allowed;
 }
+/* Style for the new "Save All" button */
+#save-all-btn {
+    font-family: 'Montserrat', sans-serif;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    background-color: #28a745; /* A nice green for a primary action */
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: background-color 0.2s ease;
+    margin-left: 1rem; /* Add some space next to the dropdown */
+}
+
+#save-all-btn:hover {
+    background-color: #218838; /* Darker green on hover */
+}
+
+#save-all-btn:disabled {
+    background-color: #B0BEC5;
+    cursor: not-allowed;
+}
