@@ -1,4 +1,3 @@
-// Define variables for elements we will need to access.
 const appContainer = document.getElementById('app-container');
 const folderFilter = document.getElementById('folder-filter');
 const tableContainer = document.getElementById('table-container');
@@ -8,12 +7,32 @@ const selectionCounter = document.getElementById('selection-counter');
 const selectAllCheckbox = document.getElementById('select-all-checkbox');
 const applyBulkEditBtn = document.getElementById('apply-bulk-edit-btn');
 
-// This will hold the logged-in user's information.
 let currentUser = null;
 let selectedVideoIds = new Set();
 
+const initializeApp = (user) => {
+    folderFilter.addEventListener('change', fetchVideosByFolder);
+    applyBulkEditBtn.addEventListener('click', handleBulkUpdate);
+    selectAllCheckbox.addEventListener('click', () => {
+        const allCheckboxes = document.querySelectorAll('.video-checkbox');
+        allCheckboxes.forEach(checkbox => {
+            checkbox.checked = selectAllCheckbox.checked;
+            const videoId = checkbox.dataset.videoId;
+            if (selectAllCheckbox.checked) {
+                selectedVideoIds.add(videoId);
+            } else {
+                selectedVideoIds.delete(videoId);
+            }
+        });
+        updateBulkEditUI();
+    });
 
-// --- All of our functions go here ---
+    if (user) {
+        currentUser = user;
+        appContainer.style.display = 'block';
+        fetchFolders(user);
+    }
+};
 
 const updateBulkEditUI = () => {
     const selectedCount = selectedVideoIds.size;
@@ -69,6 +88,7 @@ const handleBulkUpdate = async () => {
         try {
             const response = await fetch('/api/update-video', {
                 method: 'PATCH',
+                // **THE FIX IS HERE**: Correctly using ${...}
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.token.access_token}` },
                 body: JSON.stringify({ videoId, updates: finalUpdates }),
             });
@@ -155,6 +175,7 @@ const fetchVideosByFolder = async () => {
     applyBulkEditBtn.disabled = true;
     try {
         const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
+            // **THE FIX IS HERE**: Correctly using ${...}
             headers: { Authorization: `Bearer ${currentUser.token.access_token}` },
         });
         if (!response.ok) throw new Error((await response.json()).error);
@@ -206,47 +227,18 @@ const fetchFolders = async (user) => {
     }
 };
 
-// --- This is the new, stable entry point for the entire application ---
-document.addEventListener('DOMContentLoaded', () => {
-    // We wait for the entire page to be loaded before doing anything.
+netlifyIdentity.on('init', (user) => {
+    initializeApp(user);
+});
 
-    // 1. Set up event listeners for elements we know now exist.
-    folderFilter.addEventListener('change', fetchVideosByFolder);
-    applyBulkEditBtn.addEventListener('click', handleBulkUpdate);
-    selectAllCheckbox.addEventListener('click', () => {
-        const allCheckboxes = document.querySelectorAll('.video-checkbox');
-        allCheckboxes.forEach(checkbox => {
-            checkbox.checked = selectAllCheckbox.checked;
-            const videoId = checkbox.dataset.videoId;
-            if (selectAllCheckbox.checked) {
-                selectedVideoIds.add(videoId);
-            } else {
-                selectedVideoIds.delete(videoId);
-            }
-        });
-        updateBulkEditUI();
-    });
+netlifyIdentity.on('login', (user) => {
+    initializeApp(user);
+});
 
-    // 2. Set up listeners for Netlify Identity events.
-    netlifyIdentity.on('login', (user) => {
-        currentUser = user;
-        appContainer.style.display = 'block';
-        fetchFolders(user);
-    });
-
-    netlifyIdentity.on('logout', () => {
-        currentUser = null;
-        appContainer.style.display = 'none';
-        tableContainer.style.display = 'none';
-        bulkEditBar.style.display = 'none';
-        selectedVideoIds.clear();
-    });
-    
-    // 3. Check for an already logged-in user.
-    const user = netlifyIdentity.currentUser();
-    if (user) {
-        currentUser = user;
-        appContainer.style.display = 'block';
-        fetchFolders(user);
-    }
+netlifyIdentity.on('logout', () => {
+    currentUser = null;
+    appContainer.style.display = 'none';
+    tableContainer.style.display = 'none';
+    bulkEditBar.style.display = 'none';
+    selectedVideoIds.clear();
 });
