@@ -44,11 +44,15 @@ main {
 
 /* Controls (Folder Dropdown) */
 #controls-container {
-    background-color: var(--light-text);
-    padding: 1.5rem;
+    background-color: #fff;
+    padding: 1rem 1.5rem;
     border-radius: 8px;
     margin-bottom: 2rem;
     box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    /* NEW Flexbox properties for layout */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 #folder-selection label {
@@ -286,5 +290,30 @@ td[contenteditable="true"]:focus {
 
 #save-all-btn:disabled {
     background-color: #B0BEC5;
+    cursor: not-allowed;
+}
+/* Style for the new "Manage Folder" button */
+#manage-folder-btn {
+    font-family: 'Montserrat', sans-serif;
+    padding: 0.75rem 1.5rem;
+    border: 1px solid #6c757d; /* A neutral gray border */
+    background-color: transparent;
+    color: #6c757d;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+}
+
+#manage-folder-btn:hover {
+    background-color: #6c757d;
+    color: white;
+}
+
+#manage-folder-btn:disabled {
+    background-color: #B0BEC5;
+    border-color: #B0BEC5;
+    color: white;
     cursor: not-allowed;
 }
