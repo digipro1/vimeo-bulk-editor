@@ -14,10 +14,23 @@
     </header>
 
     <main id="app-container" style="display: none;">
-        <div id="video-list">
-            <p>Loading videos...</p>
-        </div>
+        <table id="video-table">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Description</th>
+                    <th>Tags</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="video-list">
+                </tbody>
+        </table>
     </main>
+
+    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+    <script src="app.js"></script>
 </body>
 <script src="app.js"></script>
 </html>
