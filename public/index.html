@@ -14,26 +14,30 @@
     </header>
 
     <main id="app-container" style="display: none;">
-        <div id="filter-container">
-            <label for="folder-filter">Filter by Folder:</label>
-            <select id="folder-filter">
-                <option value="all">All Folders</option>
-            </select>
+        <div id="controls-container">
+            <div id="folder-selection">
+                <label for="folder-filter">Select a Folder:</label>
+                <select id="folder-filter" disabled>
+                    <option>Loading folders...</option>
+                </select>
+            </div>
+            <button id="fetch-videos-btn" disabled>Fetch Videos</button>
         </div>
 
-        <table id="video-table">
-            <thead>
-                <tr>
-                    <th>Title</th>
-                    <th>Description</th>
-                    <th>Tags</th>
-                    <th>Folder</th> <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody id="video-list">
-                </tbody>
-        </table>
+        <div id="table-container" style="display: none;">
+            <table id="video-table">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Description</th>
+                        <th>Tags</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="video-list"></tbody>
+            </table>
+        </div>
     </main>
 
     <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
