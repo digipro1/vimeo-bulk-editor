@@ -11,7 +11,7 @@ exports.handler = async (event, context) => {
 
     const { VIMEO_API_TOKEN } = process.env;
     // This endpoint specifically gets folders (also called projects)
-    const API_ENDPOINT = 'https://api.vimeo.com/me/projects?fields=uri,name&per_page=100';
+    const API_ENDPOINT = 'https://api.vimeo.com/me/projects?fields=uri,name,link&per_page=100';
     let allFolders = [];
     let nextUrl = API_ENDPOINT;
 
