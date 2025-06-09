@@ -178,3 +178,22 @@ td[contenteditable="true"]:focus {
     display: none;
 }
 /* --- CSS FIX ENDS HERE --- */
+/* Style for the new privacy dropdown */
+.privacy-select {
+    font-family: 'Montserrat', sans-serif;
+    padding: 0.5rem;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    width: 100%; /* Make it fill the cell */
+}
+
+/* Style for the new "Manage" link */
+.manage-link {
+    font-weight: 600;
+    color: var(--accent-blue);
+    text-decoration: none;
+}
+
+.manage-link:hover {
+    text-decoration: underline;
+}
