@@ -34,7 +34,7 @@ exports.handler = async (event, context) => {
         statusCode: response.status,
         body: JSON.stringify({ error: 'Failed to fetch videos from Vimeo.' }),
       };
-     }
+    }
 
     const data = await response.json();
     return {
@@ -47,5 +47,4 @@ exports.handler = async (event, context) => {
       body: JSON.stringify({ error: 'Internal Server Error' }),
     };
   }
-};
-```
+}; // <-- This was the missing closing brace
