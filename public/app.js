@@ -88,7 +88,7 @@ const handleBulkUpdate = async () => {
         try {
             const response = await fetch('/api/update-video', {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer currentUser.token.access_token` },
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.token.access_token}` },
                 body: JSON.stringify({ videoId, updates: finalUpdates }),
             });
             if (!response.ok) console.error(`Failed to update video ${videoId}`);
@@ -174,7 +174,7 @@ const fetchVideosByFolder = async () => {
     applyBulkEditBtn.disabled = true;
     try {
         const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
-            headers: { Authorization: `Bearer currentUser.token.access_token` },
+            headers: { Authorization: `Bearer ${currentUser.token.access_token}` },
         });
         if (!response.ok) throw new Error((await response.json()).error);
         const { data } = await response.json();
