@@ -5,17 +5,17 @@ const videoTbody = document.getElementById('video-list');
 
 let currentUser = null;
 
-// --- 1. FETCH VIDEOS BY FOLDER ---
+// --- FETCH VIDEOS BY FOLDER (Unchanged) ---
 const fetchVideosByFolder = async () => {
     const selectedFolderUri = folderFilter.value;
     if (!selectedFolderUri) {
         tableContainer.style.display = 'block';
-        videoTbody.innerHTML = '<tr><td colspan="5">Please select a folder.</td></tr>';
+        videoTbody.innerHTML = '<tr><td colspan="7">Please select a folder.</td></tr>';
         return;
     }
 
     tableContainer.style.display = 'block';
-    videoTbody.innerHTML = `<tr><td colspan="5">Fetching videos from folder...</td></tr>`;
+    videoTbody.innerHTML = `<tr><td colspan="7">Fetching videos from folder...</td></tr>`;
     folderFilter.disabled = true;
     
     try {
@@ -28,13 +28,13 @@ const fetchVideosByFolder = async () => {
         renderTable(data);
 
     } catch (error) {
-        videoTbody.innerHTML = `<tr><td colspan="5" style="color: red;">Error: ${error.message}</td></tr>`;
+        videoTbody.innerHTML = `<tr><td colspan="7" style="color: red;">Error: ${error.message}</td></tr>`;
     } finally {
         folderFilter.disabled = false;
     }
 };
 
-// --- 2. FETCH FOLDERS ON LOGIN ---
+// --- FETCH FOLDERS (Unchanged) ---
 const fetchFolders = async (user) => {
     let allFolders = [];
     let nextPagePath = null;
@@ -45,19 +45,12 @@ const fetchFolders = async (user) => {
         do {
             pageCount++;
             const fetchUrl = nextPagePath ? `/api/get-folders?page=${encodeURIComponent(nextPagePath)}` : '/api/get-folders';
-            
-            const response = await fetch(fetchUrl, {
-                headers: { Authorization: `Bearer ${user.token.access_token}` },
-            });
-
+            const response = await fetch(fetchUrl, { headers: { Authorization: `Bearer ${user.token.access_token}` } });
             if (!response.ok) throw new Error((await response.json()).error);
-            
             const pageData = await response.json();
             allFolders = allFolders.concat(pageData.folders);
             nextPagePath = pageData.nextPagePath;
-
             folderFilter.innerHTML = `<option>Loading folders, page ${pageCount + 1}...</option>`;
-
         } while (nextPagePath);
         
         folderFilter.innerHTML = '';
@@ -85,21 +78,40 @@ const fetchFolders = async (user) => {
 
 folderFilter.addEventListener('change', fetchVideosByFolder);
 
-// --- 3. RENDER THE TABLE ---
+// --- RENDER THE TABLE (UPDATED) ---
 const renderTable = (videos) => {
     videoTbody.innerHTML = '';
     if (videos.length === 0) {
-        videoTbody.innerHTML = '<tr><td colspan="5">No videos found in this folder.</td></tr>';
+        videoTbody.innerHTML = '<tr><td colspan="7">No videos found in this folder.</td></tr>';
         return;
     }
+
+    const privacyOptions = ['anybody', 'unlisted', 'password', 'nobody'];
+
     videos.forEach(video => {
         const row = document.createElement('tr');
-        row.dataset.videoId = video.uri.split('/').pop();
+        const videoId = video.uri.split('/').pop();
+        row.dataset.videoId = videoId;
+
+        // **NEW**: Generate the privacy dropdown for each video
+        const privacyDropdown = `
+            <select class="privacy-select">
+                ${privacyOptions.map(opt => `
+                    <option value="${opt}" ${video.privacy.view === opt ? 'selected' : ''}>
+                        ${opt.charAt(0).toUpperCase() + opt.slice(1)}
+                    </option>
+                `).join('')}
+            </select>
+        `;
+        
+        // **NEW**: Add the new cells for Privacy and Manage Link
         row.innerHTML = `
             <td class="video-title" contenteditable="true">${video.name || ''}</td>
             <td class="video-description" contenteditable="true">${video.description || ''}</td>
             <td class="video-tags" contenteditable="true">${video.tags.map(tag => tag.name).join(', ')}</td>
+            <td>${privacyDropdown}</td>
             <td>${video.status}</td>
+            <td><a href="https://vimeo.com/manage/videos/${videoId}" target="_blank" class="manage-link">Manage</a></td>
             <td><button class="save-btn">Save</button></td>
         `;
         videoTbody.appendChild(row);
@@ -107,18 +119,25 @@ const renderTable = (videos) => {
     });
 };
 
-// --- 4. SAVE FUNCTION ---
+// --- SAVE FUNCTION (UPDATED) ---
 const handleSave = async (event, user) => {
     const saveButton = event.target;
     const row = saveButton.closest('tr');
     const videoId = row.dataset.videoId;
     saveButton.textContent = 'Saving...';
     saveButton.disabled = true;
+    
+    // **NEW**: Read the value from the privacy dropdown and build the nested privacy object
+    const selectedPrivacy = row.querySelector('.privacy-select').value;
     const updates = {
         name: row.querySelector('.video-title').textContent,
         description: row.querySelector('.video-description').textContent,
         tags: row.querySelector('.video-tags').textContent,
+        privacy: {
+            view: selectedPrivacy
+        }
     };
+
     try {
         const response = await fetch('/api/update-video', {
             method: 'PATCH',
@@ -136,7 +155,7 @@ const handleSave = async (event, user) => {
     }
 };
 
-// --- 5. IDENTITY AND EVENT LISTENERS ---
+// --- IDENTITY AND EVENT LISTENERS (Unchanged) ---
 document.addEventListener('DOMContentLoaded', () => {
     netlifyIdentity.on('login', (user) => {
         currentUser = user;
@@ -151,12 +170,9 @@ document.addEventListener('DOMContentLoaded', () => {
         folderFilter.innerHTML = '<option>Loading folders...</option>';
     });
 
-    // This block handles a user who is already logged in
     if (netlifyIdentity.currentUser()) {
         currentUser = netlifyIdentity.currentUser();
         appContainer.style.display = 'block';
-        // **THE FIX IS HERE**: We must pass the 'currentUser' object, not the
-        // undefined 'user' variable from the login event handler.
         fetchFolders(currentUser);
     }
 });
