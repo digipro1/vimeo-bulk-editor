@@ -6,34 +6,27 @@ const videoTbody = document.getElementById('video-list');
 let currentUser = null;
 
 // --- 1. FETCH VIDEOS BY FOLDER ---
-// This function is now triggered by the dropdown change event
 const fetchVideosByFolder = async () => {
     const selectedFolderUri = folderFilter.value;
     if (!selectedFolderUri) {
-        // This can happen if the folder list is empty.
         tableContainer.style.display = 'block';
         videoTbody.innerHTML = '<tr><td colspan="5">Please select a folder.</td></tr>';
         return;
     }
-
-    // Show loading state
     tableContainer.style.display = 'block';
     videoTbody.innerHTML = `<tr><td colspan="5">Fetching videos from folder...</td></tr>`;
-    folderFilter.disabled = true; // Disable dropdown during fetch
-    
+    folderFilter.disabled = true;
     try {
         const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
             headers: { Authorization: `Bearer ${currentUser.token.access_token}` },
         });
         if (!response.ok) throw new Error((await response.json()).error);
-        
         const { data } = await response.json();
         renderTable(data);
-
     } catch (error) {
         videoTbody.innerHTML = `<tr><td colspan="5" style="color: red;">Error: ${error.message}</td></tr>`;
     } finally {
-        folderFilter.disabled = false; // Re-enable dropdown
+        folderFilter.disabled = false;
     }
 };
 
@@ -44,15 +37,12 @@ const fetchFolders = async (user) => {
             headers: { Authorization: `Bearer ${user.token.access_token}` },
         });
         if (!response.ok) throw new Error('Could not fetch folders.');
-
         const { folders } = await response.json();
-        
         folderFilter.innerHTML = '';
         if (folders.length === 0) {
             folderFilter.innerHTML = '<option value="">No folders found</option>';
             return;
         }
-
         folders.sort((a, b) => a.name.localeCompare(b.name));
         folders.forEach(folder => {
             const option = document.createElement('option');
@@ -60,21 +50,17 @@ const fetchFolders = async (user) => {
             option.textContent = folder.name;
             folderFilter.appendChild(option);
         });
-
         folderFilter.disabled = false;
-        // **NEW**: Automatically fetch videos for the first folder in the list
         await fetchVideosByFolder();
-
     } catch (error) {
         folderFilter.innerHTML = `<option>Error loading folders</option>`;
         console.error(error);
     }
 };
 
-// **NEW**: Attach the event listener directly to the folder dropdown
 folderFilter.addEventListener('change', fetchVideosByFolder);
 
-// --- 3. RENDER THE TABLE (Unchanged) ---
+// --- 3. RENDER THE TABLE ---
 const renderTable = (videos) => {
     videoTbody.innerHTML = '';
     if (videos.length === 0) {
@@ -96,7 +82,7 @@ const renderTable = (videos) => {
     });
 };
 
-// --- 4. SAVE FUNCTION (Unchanged) ---
+// --- 4. SAVE FUNCTION ---
 const handleSave = async (event, user) => {
     const saveButton = event.target;
     const row = saveButton.closest('tr');
@@ -125,8 +111,13 @@ const handleSave = async (event, user) => {
     }
 };
 
-// --- 5. IDENTITY AND EVENT LISTENERS (Unchanged) ---
+// --- 5. IDENTITY AND EVENT LISTENERS (UPDATED) ---
 document.addEventListener('DOMContentLoaded', () => {
+    // We take manual control of the widget
+    netlifyIdentity.init({
+        container: '#auth-container' // Tell the widget to live in our new div
+    });
+
     netlifyIdentity.on('login', (user) => {
         currentUser = user;
         appContainer.style.display = 'block';
@@ -140,9 +131,12 @@ document.addEventListener('DOMContentLoaded', () => {
         folderFilter.innerHTML = '<option>Loading folders...</option>';
     });
 
-    if (netlifyIdentity.currentUser()) {
-        currentUser = netlifyIdentity.currentUser();
-        appContainer.style.display = 'block';
-        fetchFolders(currentUser);
-    }
+    // This handles the case where a user is already logged in
+    netlifyIdentity.on('init', (user) => {
+        if (user) {
+            currentUser = user;
+            appContainer.style.display = 'block';
+            fetchFolders(user);
+        }
+    });
 });
