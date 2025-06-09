@@ -1,8 +1,8 @@
+// --- All variable definitions at the top are scoped globally for access ---
 const appContainer = document.getElementById('app-container');
 const folderFilter = document.getElementById('folder-filter');
 const tableContainer = document.getElementById('table-container');
 const videoTbody = document.getElementById('video-list');
-// Bulk Edit UI elements
 const bulkEditBar = document.getElementById('bulk-edit-bar');
 const selectionCounter = document.getElementById('selection-counter');
 const selectAllCheckbox = document.getElementById('select-all-checkbox');
@@ -11,7 +11,34 @@ const applyBulkEditBtn = document.getElementById('apply-bulk-edit-btn');
 let currentUser = null;
 let selectedVideoIds = new Set();
 
-// --- BULK EDIT LOGIC ---
+// --- We wrap our entire application logic in a function ---
+const initializeApp = (user) => {
+    // Set up all event listeners now that we know the DOM and widget are ready
+    folderFilter.addEventListener('change', fetchVideosByFolder);
+    applyBulkEditBtn.addEventListener('click', handleBulkUpdate);
+    selectAllCheckbox.addEventListener('click', () => {
+        const allCheckboxes = document.querySelectorAll('.video-checkbox');
+        allCheckboxes.forEach(checkbox => {
+            checkbox.checked = selectAllCheckbox.checked;
+            const videoId = checkbox.dataset.videoId;
+            if (selectAllCheckbox.checked) {
+                selectedVideoIds.add(videoId);
+            } else {
+                selectedVideoIds.delete(videoId);
+            }
+        });
+        updateBulkEditUI();
+    });
+
+    // If a user is passed during initialization, start the app
+    if (user) {
+        currentUser = user;
+        appContainer.style.display = 'block';
+        fetchFolders(user);
+    }
+};
+
+// --- All other functions remain the same ---
 const updateBulkEditUI = () => {
     const selectedCount = selectedVideoIds.size;
     if (selectedCount > 0) {
@@ -34,20 +61,6 @@ const handleSelectionChange = (event) => {
     }
     updateBulkEditUI();
 };
-
-selectAllCheckbox.addEventListener('click', () => {
-    const allCheckboxes = document.querySelectorAll('.video-checkbox');
-    allCheckboxes.forEach(checkbox => {
-        checkbox.checked = selectAllCheckbox.checked;
-        const videoId = checkbox.dataset.videoId;
-        if (selectAllCheckbox.checked) {
-            selectedVideoIds.add(videoId);
-        } else {
-            selectedVideoIds.delete(videoId);
-        }
-    });
-    updateBulkEditUI();
-});
 
 const handleBulkUpdate = async () => {
     const bulkPrivacy = document.getElementById('bulk-privacy').value;
@@ -83,9 +96,7 @@ const handleBulkUpdate = async () => {
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.token.access_token}` },
                 body: JSON.stringify({ videoId, updates: finalUpdates }),
             });
-            if (!response.ok) {
-                console.error(`Failed to update video ${videoId}`);
-            }
+            if (!response.ok) console.error(`Failed to update video ${videoId}`);
         } catch (error) {
             console.error(`Error updating video ${videoId}:`, error);
         }
@@ -95,9 +106,6 @@ const handleBulkUpdate = async () => {
     await fetchVideosByFolder();
 };
 
-applyBulkEditBtn.addEventListener('click', handleBulkUpdate);
-
-// --- RENDER THE TABLE ---
 const renderTable = (videos) => {
     videoTbody.innerHTML = '';
     if (videos.length === 0) {
@@ -128,7 +136,6 @@ const renderTable = (videos) => {
     updateBulkEditUI();
 };
 
-// --- SAVE FUNCTION ---
 const handleSave = async (event, user) => {
     const saveButton = event.target;
     const row = saveButton.closest('tr');
@@ -159,7 +166,6 @@ const handleSave = async (event, user) => {
     }
 };
 
-// --- FETCH VIDEOS BY FOLDER ---
 const fetchVideosByFolder = async () => {
     const selectedFolderUri = folderFilter.value;
     if (!selectedFolderUri) {
@@ -186,7 +192,6 @@ const fetchVideosByFolder = async () => {
     }
 };
 
-// --- FETCH FOLDERS ---
 const fetchFolders = async (user) => {
     let allFolders = [];
     let nextPagePath = null;
@@ -225,36 +230,24 @@ const fetchFolders = async (user) => {
     }
 };
 
-// --- This entire block handles page setup and authentication ---
-document.addEventListener('DOMContentLoaded', () => {
-    // **THE FIX**: This event listener MUST be inside this block.
-    // It waits until the HTML is loaded before trying to find the dropdown.
-    folderFilter.addEventListener('change', fetchVideosByFolder);
+// --- THIS IS THE NEW, ROBUST INITIALIZATION LOGIC ---
+// We wait for the Netlify Identity widget to report that it's ready.
+netlifyIdentity.on('init', (user) => {
+    // The 'init' event is fired when the widget is ready, and it returns
+    // a user object if someone is already logged in.
+    initializeApp(user);
+});
 
-    // Setup Netlify Identity event listeners
-    netlifyIdentity.on('login', (user) => {
-        currentUser = user;
-        appContainer.style.display = 'block';
-        fetchFolders(user);
-    });
+netlifyIdentity.on('login', (user) => {
+    // When a user logs in, we re-initialize the app with the new user.
+    initializeApp(user);
+});
 
-    netlifyIdentity.on('logout', () => {
-        currentUser = null;
-        appContainer.style.display = 'none';
-        tableContainer.style.display = 'none';
-        folderFilter.innerHTML = '<option>Loading folders...</option>';
-        bulkEditBar.style.display = 'none';
-        selectedVideoIds.clear();
-    });
-
-    netlifyIdentity.on('init', (user) => {
-        if (user) {
-            currentUser = user;
-            appContainer.style.display = 'block';
-            fetchFolders(user);
-        }
-    });
-    
-    // Initialize the widget
-    netlifyIdentity.init();
+netlifyIdentity.on('logout', () => {
+    // When a user logs out, hide the main application.
+    currentUser = null;
+    appContainer.style.display = 'none';
+    tableContainer.style.display = 'none';
+    bulkEditBar.style.display = 'none';
+    selectedVideoIds.clear();
 });
