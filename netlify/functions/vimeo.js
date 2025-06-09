@@ -11,33 +11,43 @@ exports.handler = async (event, context) => {
 
     const { VIMEO_API_TOKEN } = process.env;
     const params = new URLSearchParams(event.queryStringParameters);
-    // 'page' will be the path for the next page, e.g., "/me/videos?page=2"
-    const page = params.get('page'); 
+    const folderUri = params.get('folderUri');
 
-    // If a 'page' path is provided, use it. Otherwise, use the initial URL.
-    const initialUrl = `https://api.vimeo.com/me/videos?fields=uri,name,description,tags,status,parent_folder&per_page=100`;
-    const fetchUrl = page ? `https://api.vimeo.com${page}` : initialUrl;
+    if (!folderUri) {
+        return {
+            statusCode: 400,
+            body: JSON.stringify({ error: 'A folder URI must be provided.' }),
+        };
+    }
+
+    // The new endpoint gets items from a specific folder.
+    const fields = 'uri,name,description,tags,status,parent_folder';
+    const initialUrl = `https://api.vimeo.com${folderUri}/videos?fields=${fields}&per_page=100`;
+
+    // The rest of the function is the same pagination logic as before
+    let allVideos = [];
+    let nextUrl = initialUrl;
 
     try {
-        const response = await fetch(fetchUrl, {
-            headers: { Authorization: `Bearer ${VIMEO_API_TOKEN}` },
-        });
+        while (nextUrl) {
+            const response = await fetch(nextUrl, {
+                headers: { Authorization: `Bearer ${VIMEO_API_TOKEN}` },
+            });
 
-        if (!response.ok) {
-            throw new Error('Failed to fetch a page from Vimeo.');
+            if (!response.ok) throw new Error('Failed to fetch videos from Vimeo.');
+
+            const pageData = await response.json();
+            allVideos = allVideos.concat(pageData.data);
+
+            nextUrl = pageData.paging && pageData.paging.next
+                ? `https://api.vimeo.com${pageData.paging.next}`
+                : null;
         }
 
-        const responseData = await response.json();
-
-        // Return this page's data AND the path to the next page
         return {
             statusCode: 200,
-            body: JSON.stringify({
-                data: responseData.data,
-                nextPagePath: responseData.paging ? responseData.paging.next : null,
-            }),
+            body: JSON.stringify({ data: allVideos }),
         };
-
     } catch (error) {
         return {
             statusCode: 500,
