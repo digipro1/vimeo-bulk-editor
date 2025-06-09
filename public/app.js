@@ -36,22 +36,38 @@ const fetchVideosByFolder = async () => {
 
 // --- 2. FETCH FOLDERS ON LOGIN ---
 const fetchFolders = async (user) => {
-    try {
-        const response = await fetch('/api/get-folders', {
-            headers: { Authorization: `Bearer ${user.token.access_token}` },
-        });
-        if (!response.ok) throw new Error('Could not fetch folders.');
+    let allFolders = [];
+    let nextPagePath = null;
+    let pageCount = 0;
+    folderFilter.innerHTML = `<option>Loading folders, page 1...</option>`;
 
-        const { folders } = await response.json();
+    try {
+        do {
+            pageCount++;
+            const fetchUrl = nextPagePath ? `/api/get-folders?page=${encodeURIComponent(nextPagePath)}` : '/api/get-folders';
+            
+            const response = await fetch(fetchUrl, {
+                headers: { Authorization: `Bearer ${user.token.access_token}` },
+            });
+
+            if (!response.ok) throw new Error((await response.json()).error);
+            
+            const pageData = await response.json();
+            allFolders = allFolders.concat(pageData.folders);
+            nextPagePath = pageData.nextPagePath;
+
+            folderFilter.innerHTML = `<option>Loading folders, page ${pageCount + 1}...</option>`;
+
+        } while (nextPagePath);
         
         folderFilter.innerHTML = '';
-        if (folders.length === 0) {
+        if (allFolders.length === 0) {
             folderFilter.innerHTML = '<option value="">No folders found</option>';
             return;
         }
 
-        folders.sort((a, b) => a.name.localeCompare(b.name));
-        folders.forEach(folder => {
+        allFolders.sort((a, b) => a.name.localeCompare(b.name));
+        allFolders.forEach(folder => {
             const option = document.createElement('option');
             option.value = folder.uri;
             option.textContent = folder.name;
@@ -120,7 +136,7 @@ const handleSave = async (event, user) => {
     }
 };
 
-// --- 5. IDENTITY AND EVENT LISTENERS (Reverted to simpler version) ---
+// --- 5. IDENTITY AND EVENT LISTENERS ---
 document.addEventListener('DOMContentLoaded', () => {
     netlifyIdentity.on('login', (user) => {
         currentUser = user;
@@ -135,9 +151,12 @@ document.addEventListener('DOMContentLoaded', () => {
         folderFilter.innerHTML = '<option>Loading folders...</option>';
     });
 
+    // This block handles a user who is already logged in
     if (netlifyIdentity.currentUser()) {
         currentUser = netlifyIdentity.currentUser();
         appContainer.style.display = 'block';
-        fetchFolders(user);
+        // **THE FIX IS HERE**: We must pass the 'currentUser' object, not the
+        // undefined 'user' variable from the login event handler.
+        fetchFolders(currentUser);
     }
 });
