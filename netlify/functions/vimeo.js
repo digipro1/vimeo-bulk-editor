@@ -11,46 +11,34 @@ exports.handler = async (event, context) => {
 
     const { VIMEO_API_TOKEN } = process.env;
     const params = new URLSearchParams(event.queryStringParameters);
-    const fields = params.get('fields') || 'uri,name,description,tags,status,parent_folder';
-    
-    let allVideos = [];
-    // The initial URL is absolute, which is correct.
-    let nextUrl = `https://api.vimeo.com/me/videos?fields=${fields}&per_page=100`;
-    let safetyCounter = 0;
+    // 'page' will be the path for the next page, e.g., "/me/videos?page=2"
+    const page = params.get('page'); 
+
+    // If a 'page' path is provided, use it. Otherwise, use the initial URL.
+    const initialUrl = `https://api.vimeo.com/me/videos?fields=uri,name,description,tags,status,parent_folder&per_page=100`;
+    const fetchUrl = page ? `https://api.vimeo.com${page}` : initialUrl;
 
     try {
-        // Loop while there's a next page URL and we haven't hit our safety limit
-        while (nextUrl && safetyCounter < 50) {
-            const response = await fetch(nextUrl, { // On first loop, this is the full URL
-                headers: { Authorization: `Bearer ${VIMEO_API_TOKEN}` },
-            });
+        const response = await fetch(fetchUrl, {
+            headers: { Authorization: `Bearer ${VIMEO_API_TOKEN}` },
+        });
 
-            if (!response.ok) {
-                console.error("Vimeo API Error Response:", await response.text());
-                throw new Error('Failed to fetch videos from Vimeo.');
-            }
-
-            const pageData = await response.json();
-            allVideos = allVideos.concat(pageData.data);
-
-            // --- THIS IS THE FIX ---
-            // Check if the 'next' paging link exists and construct an absolute URL if it does.
-            if (pageData.paging && pageData.paging.next) {
-                nextUrl = `https://api.vimeo.com${pageData.paging.next}`;
-            } else {
-                nextUrl = null; // No more pages, so we stop the loop.
-            }
-            
-            safetyCounter++;
+        if (!response.ok) {
+            throw new Error('Failed to fetch a page from Vimeo.');
         }
 
+        const responseData = await response.json();
+
+        // Return this page's data AND the path to the next page
         return {
             statusCode: 200,
-            body: JSON.stringify({ data: allVideos }),
+            body: JSON.stringify({
+                data: responseData.data,
+                nextPagePath: responseData.paging ? responseData.paging.next : null,
+            }),
         };
 
     } catch (error) {
-        console.error('Vimeo fetch error:', error);
         return {
             statusCode: 500,
             body: JSON.stringify({ error: error.message }),
