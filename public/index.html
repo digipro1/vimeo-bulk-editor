@@ -10,7 +10,7 @@
 <body>
     <header>
         <h1>Vimeo Bulk Editor</h1>
-        <div data-netlify-identity-button></div>
+        <div id="auth-container"></div>
     </header>
 
     <main id="app-container" style="display: none;">
@@ -23,10 +23,34 @@
             </div>
         </div>
 
+        <div id="bulk-edit-bar" style="display: none;">
+            <div class="bulk-edit-header">
+                <span id="selection-counter"></span>
+            </div>
+            <div class="bulk-edit-fields">
+                <div class="field-group">
+                    <label for="bulk-privacy">Privacy</label>
+                    <select id="bulk-privacy">
+                        <option value="">-- No Change --</option>
+                        <option value="anybody">Anybody</option>
+                        <option value="unlisted">Unlisted</option>
+                        <option value="password">Password</option>
+                        <option value="nobody">Nobody</option>
+                    </select>
+                </div>
+                <div class="field-group">
+                    <label for="bulk-tags">Add Tags (comma-separated)</label>
+                    <input type="text" id="bulk-tags" placeholder="e.g. newtag, anothertag">
+                </div>
+            </div>
+            <button id="apply-bulk-edit-btn">Apply to Selected</button>
+        </div>
+
         <div id="table-container" style="display: none;">
             <table id="video-table">
                 <thead>
-                     <tr>
+                    <tr>
+                        <th><input type="checkbox" id="select-all-checkbox"></th>
                         <th>Title</th>
                         <th>Description</th>
                         <th>Tags</th>
