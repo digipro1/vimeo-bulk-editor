@@ -21,7 +21,7 @@ exports.handler = async (event, context) => {
     }
 
     // The new endpoint gets items from a specific folder.
-    const fields = 'uri,name,description,tags,status,parent_folder';
+    const fields = 'uri,name,description,tags,status,parent_folder,privacy';
     const initialUrl = `https://api.vimeo.com${folderUri}/videos?fields=${fields}&per_page=100`;
 
     // The rest of the function is the same pagination logic as before
