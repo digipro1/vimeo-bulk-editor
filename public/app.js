@@ -2,110 +2,139 @@ const appContainer = document.getElementById('app-container');
 const folderFilter = document.getElementById('folder-filter');
 const tableContainer = document.getElementById('table-container');
 const videoTbody = document.getElementById('video-list');
+// NEW: Bulk Edit UI elements
+const bulkEditBar = document.getElementById('bulk-edit-bar');
+const selectionCounter = document.getElementById('selection-counter');
+const selectAllCheckbox = document.getElementById('select-all-checkbox');
+const applyBulkEditBtn = document.getElementById('apply-bulk-edit-btn');
 
 let currentUser = null;
+let selectedVideoIds = new Set(); // Use a Set for efficient add/delete
 
-// --- FETCH VIDEOS BY FOLDER (Unchanged) ---
-const fetchVideosByFolder = async () => {
-    const selectedFolderUri = folderFilter.value;
-    if (!selectedFolderUri) {
-        tableContainer.style.display = 'block';
-        videoTbody.innerHTML = '<tr><td colspan="7">Please select a folder.</td></tr>';
+// --- NEW: BULK EDIT LOGIC ---
+const updateBulkEditUI = () => {
+    const selectedCount = selectedVideoIds.size;
+    if (selectedCount > 0) {
+        bulkEditBar.style.display = 'block';
+        selectionCounter.textContent = `${selectedCount} video(s) selected`;
+    } else {
+        bulkEditBar.style.display = 'none';
+    }
+    // Sync "Select All" checkbox state
+    const totalCheckboxes = document.querySelectorAll('.video-checkbox').length;
+    selectAllCheckbox.checked = totalCheckboxes > 0 && selectedCount === totalCheckboxes;
+};
+
+const handleSelectionChange = (event) => {
+    const checkbox = event.target;
+    const videoId = checkbox.dataset.videoId;
+    if (checkbox.checked) {
+        selectedVideoIds.add(videoId);
+    } else {
+        selectedVideoIds.delete(videoId);
+    }
+    updateBulkEditUI();
+};
+
+selectAllCheckbox.addEventListener('click', () => {
+    const allCheckboxes = document.querySelectorAll('.video-checkbox');
+    allCheckboxes.forEach(checkbox => {
+        checkbox.checked = selectAllCheckbox.checked;
+        const videoId = checkbox.dataset.videoId;
+        if (selectAllCheckbox.checked) {
+            selectedVideoIds.add(videoId);
+        } else {
+            selectedVideoIds.delete(videoId);
+        }
+    });
+    updateBulkEditUI();
+});
+
+const handleBulkUpdate = async () => {
+    const bulkPrivacy = document.getElementById('bulk-privacy').value;
+    const bulkTags = document.getElementById('bulk-tags').value;
+
+    if (!bulkPrivacy && !bulkTags) {
+        alert('Please choose a privacy setting or enter tags to apply.');
         return;
     }
 
-    tableContainer.style.display = 'block';
-    videoTbody.innerHTML = `<tr><td colspan="7">Fetching videos from folder...</td></tr>`;
-    folderFilter.disabled = true;
-    
-    try {
-        const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
-            headers: { Authorization: `Bearer ${currentUser.token.access_token}` },
-        });
-        if (!response.ok) throw new Error((await response.json()).error);
-        
-        const { data } = await response.json();
-        renderTable(data);
-
-    } catch (error) {
-        videoTbody.innerHTML = `<tr><td colspan="7" style="color: red;">Error: ${error.message}</td></tr>`;
-    } finally {
-        folderFilter.disabled = false;
+    const updates = {};
+    if (bulkPrivacy) {
+        updates.privacy = { view: bulkPrivacy };
     }
-};
+    if (bulkTags) {
+        // This will ADD the new tags to existing ones.
+        // We'll handle combining them in the save logic.
+        updates.tags = bulkTags; 
+    }
 
-// --- FETCH FOLDERS (Unchanged) ---
-const fetchFolders = async (user) => {
-    let allFolders = [];
-    let nextPagePath = null;
-    let pageCount = 0;
-    folderFilter.innerHTML = `<option>Loading folders, page 1...</option>`;
+    applyBulkEditBtn.textContent = 'Updating...';
+    applyBulkEditBtn.disabled = true;
 
-    try {
-        do {
-            pageCount++;
-            const fetchUrl = nextPagePath ? `/api/get-folders?page=${encodeURIComponent(nextPagePath)}` : '/api/get-folders';
-            const response = await fetch(fetchUrl, { headers: { Authorization: `Bearer ${user.token.access_token}` } });
-            if (!response.ok) throw new Error((await response.json()).error);
-            const pageData = await response.json();
-            allFolders = allFolders.concat(pageData.folders);
-            nextPagePath = pageData.nextPagePath;
-            folderFilter.innerHTML = `<option>Loading folders, page ${pageCount + 1}...</option>`;
-        } while (nextPagePath);
+    let count = 0;
+    const videoRows = Array.from(videoTbody.querySelectorAll('tr'));
+
+    for (const videoId of selectedVideoIds) {
+        count++;
+        selectionCounter.textContent = `Updating ${count} of ${selectedVideoIds.size}...`;
         
-        folderFilter.innerHTML = '';
-        if (allFolders.length === 0) {
-            folderFilter.innerHTML = '<option value="">No folders found</option>';
-            return;
+        // Find the corresponding row to get existing data if needed for tags
+        const row = videoRows.find(r => r.dataset.videoId === videoId);
+        if (!row) continue; // Skip if row not found
+
+        const currentTags = row.querySelector('.video-tags').textContent;
+        let finalUpdates = { ...updates };
+
+        // Combine new tags with existing tags
+        if (updates.tags) {
+            const existingTags = currentTags.split(',').map(t => t.trim()).filter(Boolean);
+            const newTags = updates.tags.split(',').map(t => t.trim()).filter(Boolean);
+            const combinedTags = [...new Set([...existingTags, ...newTags])]; // Use Set to ensure uniqueness
+            finalUpdates.tags = combinedTags.join(',');
         }
-
-        allFolders.sort((a, b) => a.name.localeCompare(b.name));
-        allFolders.forEach(folder => {
-            const option = document.createElement('option');
-            option.value = folder.uri;
-            option.textContent = folder.name;
-            folderFilter.appendChild(option);
-        });
-
-        folderFilter.disabled = false;
-        await fetchVideosByFolder();
-
-    } catch (error) {
-        folderFilter.innerHTML = `<option>Error loading folders</option>`;
-        console.error(error);
+        
+        try {
+            const response = await fetch('/api/update-video', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.token.access_token}` },
+                body: JSON.stringify({ videoId, updates: finalUpdates }),
+            });
+            if (!response.ok) {
+                console.error(`Failed to update video ${videoId}`);
+            }
+        } catch (error) {
+            console.error(`Error updating video ${videoId}:`, error);
+        }
     }
+
+    alert('Bulk update complete!');
+    applyBulkEditBtn.textContent = 'Apply to Selected';
+    applyBulkEditBtn.disabled = false;
+    
+    // Refresh the folder view to see changes
+    await fetchVideosByFolder();
 };
 
-folderFilter.addEventListener('change', fetchVideosByFolder);
+applyBulkEditBtn.addEventListener('click', handleBulkUpdate);
+
 
 // --- RENDER THE TABLE (UPDATED) ---
 const renderTable = (videos) => {
     videoTbody.innerHTML = '';
     if (videos.length === 0) {
-        videoTbody.innerHTML = '<tr><td colspan="7">No videos found in this folder.</td></tr>';
+        videoTbody.innerHTML = '<tr><td colspan="8">No videos found in this folder.</td></tr>';
         return;
     }
-
     const privacyOptions = ['anybody', 'unlisted', 'password', 'nobody'];
-
     videos.forEach(video => {
         const row = document.createElement('tr');
         const videoId = video.uri.split('/').pop();
         row.dataset.videoId = videoId;
-
-        // **NEW**: Generate the privacy dropdown for each video
-        const privacyDropdown = `
-            <select class="privacy-select">
-                ${privacyOptions.map(opt => `
-                    <option value="${opt}" ${video.privacy.view === opt ? 'selected' : ''}>
-                        ${opt.charAt(0).toUpperCase() + opt.slice(1)}
-                    </option>
-                `).join('')}
-            </select>
-        `;
+        const privacyDropdown = `<select class="privacy-select">${privacyOptions.map(opt => `<option value="${opt}" ${video.privacy.view === opt ? 'selected' : ''}>${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`).join('')}</select>`;
         
-        // **NEW**: Add the new cells for Privacy and Manage Link
         row.innerHTML = `
+            <td><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
             <td class="video-title" contenteditable="true">${video.name || ''}</td>
             <td class="video-description" contenteditable="true">${video.description || ''}</td>
             <td class="video-tags" contenteditable="true">${video.tags.map(tag => tag.name).join(', ')}</td>
@@ -116,28 +145,26 @@ const renderTable = (videos) => {
         `;
         videoTbody.appendChild(row);
         row.querySelector('.save-btn').addEventListener('click', (e) => handleSave(e, currentUser));
+        row.querySelector('.video-checkbox').addEventListener('change', handleSelectionChange);
     });
+    selectedVideoIds.clear();
+    updateBulkEditUI();
 };
 
-// --- SAVE FUNCTION (UPDATED) ---
+// --- SAVE FUNCTION (UNCHANGED) ---
 const handleSave = async (event, user) => {
     const saveButton = event.target;
     const row = saveButton.closest('tr');
     const videoId = row.dataset.videoId;
     saveButton.textContent = 'Saving...';
     saveButton.disabled = true;
-    
-    // **NEW**: Read the value from the privacy dropdown and build the nested privacy object
     const selectedPrivacy = row.querySelector('.privacy-select').value;
     const updates = {
         name: row.querySelector('.video-title').textContent,
         description: row.querySelector('.video-description').textContent,
         tags: row.querySelector('.video-tags').textContent,
-        privacy: {
-            view: selectedPrivacy
-        }
+        privacy: { view: selectedPrivacy }
     };
-
     try {
         const response = await fetch('/api/update-video', {
             method: 'PATCH',
@@ -155,21 +182,83 @@ const handleSave = async (event, user) => {
     }
 };
 
-// --- IDENTITY AND EVENT LISTENERS (Unchanged) ---
+// --- FETCH VIDEOS BY FOLDER (UNCHANGED) ---
+const fetchVideosByFolder = async () => {
+    const selectedFolderUri = folderFilter.value;
+    if (!selectedFolderUri) {
+        tableContainer.style.display = 'block';
+        videoTbody.innerHTML = '<tr><td colspan="8">Please select a folder.</td></tr>';
+        return;
+    }
+    tableContainer.style.display = 'block';
+    videoTbody.innerHTML = `<tr><td colspan="8">Fetching videos from folder...</td></tr>`;
+    folderFilter.disabled = true;
+    try {
+        const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
+            headers: { Authorization: `Bearer ${currentUser.token.access_token}` },
+        });
+        if (!response.ok) throw new Error((await response.json()).error);
+        const { data } = await response.json();
+        renderTable(data);
+    } catch (error) {
+        videoTbody.innerHTML = `<tr><td colspan="8" style="color: red;">Error: ${error.message}</td></tr>`;
+    } finally {
+        folderFilter.disabled = false;
+    }
+};
+
+// --- FETCH FOLDERS (UNCHANGED) ---
+const fetchFolders = async (user) => {
+    let allFolders = [];
+    let nextPagePath = null;
+    let pageCount = 0;
+    folderFilter.innerHTML = `<option>Loading folders, page 1...</option>`;
+    try {
+        do {
+            pageCount++;
+            const fetchUrl = nextPagePath ? `/api/get-folders?page=${encodeURIComponent(nextPagePath)}` : '/api/get-folders';
+            const response = await fetch(fetchUrl, { headers: { Authorization: `Bearer ${user.token.access_token}` } });
+            if (!response.ok) throw new Error((await response.json()).error);
+            const pageData = await response.json();
+            allFolders = allFolders.concat(pageData.folders);
+            nextPagePath = pageData.nextPagePath;
+            folderFilter.innerHTML = `<option>Loading folders, page ${pageCount + 1}...</option>`;
+        } while (nextPagePath);
+        folderFilter.innerHTML = '';
+        if (allFolders.length === 0) {
+            folderFilter.innerHTML = '<option value="">No folders found</option>';
+            return;
+        }
+        allFolders.sort((a, b) => a.name.localeCompare(b.name));
+        allFolders.forEach(folder => {
+            const option = document.createElement('option');
+            option.value = folder.uri;
+            option.textContent = folder.name;
+            folderFilter.appendChild(option);
+        });
+        folderFilter.disabled = false;
+        await fetchVideosByFolder();
+    } catch (error) {
+        folderFilter.innerHTML = `<option>Error loading folders</option>`;
+        console.error(error);
+    }
+};
+
+folderFilter.addEventListener('change', fetchVideosByFolder);
+
+// --- IDENTITY AND EVENT LISTENERS (UNCHANGED) ---
 document.addEventListener('DOMContentLoaded', () => {
     netlifyIdentity.on('login', (user) => {
         currentUser = user;
         appContainer.style.display = 'block';
         fetchFolders(user);
     });
-
     netlifyIdentity.on('logout', () => {
         currentUser = null;
         appContainer.style.display = 'none';
         tableContainer.style.display = 'none';
         folderFilter.innerHTML = '<option>Loading folders...</option>';
     });
-
     if (netlifyIdentity.currentUser()) {
         currentUser = netlifyIdentity.currentUser();
         appContainer.style.display = 'block';
