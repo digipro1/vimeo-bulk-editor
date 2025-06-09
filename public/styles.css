@@ -317,3 +317,17 @@ td[contenteditable="true"]:focus {
     color: white;
     cursor: not-allowed;
 }
+/* --- New Header Logo Styles --- */
+
+/* This container uses Flexbox to align the logo and title */
+.header-logo-title {
+    display: flex;
+    align-items: center; /* This vertically centers the items */
+    gap: 1rem; /* This creates space between the logo and the title */
+}
+
+/* This controls the size of your logo */
+.header-logo {
+    height: 40px; /* You can adjust this value to make your logo bigger or smaller */
+    width: auto;
+}
