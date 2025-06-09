@@ -171,4 +171,10 @@ td[contenteditable="true"]:focus {
 #auth-container button:hover {
     text-decoration: underline;
 }
+/* --- NEW RULE TO FIX DUPLICATE BUTTON --- */
+/* This targets any link that is an immediate sibling of another link
+   inside the widget, and hides it. */
+[data-netlify-identity-button] a + a {
+    display: none;
+}
 /* --- CSS FIX ENDS HERE --- */
