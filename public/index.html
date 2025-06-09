@@ -5,11 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vimeo Bulk Editor</title>
     <link rel="stylesheet" href="styles.css">
+    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 </head>
 <body>
-    <h1>Vimeo Bulk Editor</h1>
-    <div id="video-list"></div>
+    <header>
+        <h1>Vimeo Bulk Editor</h1>
+        <div data-netlify-identity-button></div>
+    </header>
 
-    <script src="app.js"></script>
+    <main id="app-container" style="display: none;">
+        <div id="video-list">
+            <p>Loading videos...</p>
+        </div>
+    </main>
 </body>
+<script src="app.js"></script>
 </html>
