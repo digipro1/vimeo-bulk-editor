@@ -1,50 +1,51 @@
 const fetch = require('node-fetch');
 
 exports.handler = async (event, context) => {
-  // The context object includes user information if a valid token was sent
-  const { user } = context.clientContext;
-
-  // Block requests from unauthenticated users
-  if (!user) {
-    return {
-      statusCode: 401, // Unauthorized
-      body: JSON.stringify({ error: 'You must be logged in to access this data.' }),
-    };
-  }
-
-  const { VIMEO_API_TOKEN } = process.env;
-  const API_ENDPOINT = 'https://api.vimeo.com/me/videos?fields=uri,name,description,tags,parent_folder';
-
-  if (!VIMEO_API_TOKEN) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Vimeo API token is not configured.' }),
-    };
-  }
-
-  try {
-    const response = await fetch(API_ENDPOINT, {
-      headers: {
-        Authorization: `Bearer ${VIMEO_API_TOKEN}`,
-      },
-    });
-
-    if (!response.ok) {
-      return {
-        statusCode: response.status,
-        body: JSON.stringify({ error: 'Failed to fetch videos from Vimeo.' }),
-      };
+    const { user } = context.clientContext;
+    if (!user) {
+        return {
+            statusCode: 401,
+            body: JSON.stringify({ error: 'You must be logged in.' }),
+        };
     }
 
-    const data = await response.json();
-    return {
-      statusCode: 200,
-      body: JSON.stringify(data),
-    };
-  } catch (error) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Internal Server Error' }),
-    };
-  }
-}; // <-- This was the missing closing brace
+    const { VIMEO_API_TOKEN } = process.env;
+    // Get the requested fields from the query string, with defaults
+    const params = new URLSearchParams(event.queryStringParameters);
+    const fields = params.get('fields') || 'uri,name,description,tags,status,parent_folder';
+
+    let allVideos = [];
+    let nextPageUrl = `https://api.vimeo.com/me/videos?fields=${fields}&per_page=100`; // Start with 100 per page
+    let safetyCounter = 0; // Prevents accidental infinite loops
+
+    try {
+        // Loop while there's a next page URL and we haven't hit our safety limit
+        while (nextPageUrl && safetyCounter < 50) {
+            const response = await fetch(nextPageUrl, {
+                headers: { Authorization: `Bearer ${VIMEO_API_TOKEN}` },
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch videos from Vimeo.');
+            }
+
+            const pageData = await response.json();
+            allVideos = allVideos.concat(pageData.data); // Add the videos from this page to our list
+            nextPageUrl = pageData.paging.next; // Get the URL for the next page
+            safetyCounter++;
+        }
+
+        return {
+            statusCode: 200,
+            // We wrap our results in a 'data' object to match the original structure
+            body: JSON.stringify({ data: allVideos }),
+        };
+
+    } catch (error) {
+        console.error('Vimeo fetch error:', error);
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: error.message }),
+        };
+    }
+};
