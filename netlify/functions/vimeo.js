@@ -1,11 +1,20 @@
 const fetch = require('node-fetch');
 
 exports.handler = async (event, context) => {
+  // The context object includes user information if a valid token was sent
+  const { user } = context.clientContext;
+
+  // Block requests from unauthenticated users
+  if (!user) {
+    return {
+      statusCode: 401, // Unauthorized
+      body: JSON.stringify({ error: 'You must be logged in to access this data.' }),
+    };
+  }
+
   const { VIMEO_API_TOKEN } = process.env;
-  // The endpoint to get all videos for the authenticated user.
   const API_ENDPOINT = 'https://api.vimeo.com/me/videos?fields=uri,name,description,tags,parent_folder';
 
-  // Check if the token is available
   if (!VIMEO_API_TOKEN) {
     return {
       statusCode: 500,
@@ -25,7 +34,7 @@ exports.handler = async (event, context) => {
         statusCode: response.status,
         body: JSON.stringify({ error: 'Failed to fetch videos from Vimeo.' }),
       };
-    }
+     }
 
     const data = await response.json();
     return {
@@ -39,3 +48,4 @@ exports.handler = async (event, context) => {
     };
   }
 };
+```
