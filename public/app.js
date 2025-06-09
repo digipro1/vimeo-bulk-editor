@@ -1,106 +1,102 @@
 const appContainer = document.getElementById('app-container');
-const videoTbody = document.getElementById('video-list');
 const folderFilter = document.getElementById('folder-filter');
+const fetchBtn = document.getElementById('fetch-videos-btn');
+const tableContainer = document.getElementById('table-container');
+const videoTbody = document.getElementById('video-list');
 
-let allVideos = [];
 let currentUser = null;
 
-// --- FETCH VIDEOS (REWRITTEN FOR PAGINATION) ---
-const fetchAllVideos = async (user) => {
-    let nextPagePath = null;
-    let pageCount = 0;
-    allVideos = []; // Reset the video list
-
-    const statusCell = document.querySelector('#video-list td');
-    videoTbody.innerHTML = '<tr><td colspan="6">Fetching page 1 from your library...</td></tr>';
-
+// --- 1. FETCH FOLDERS ON LOGIN ---
+const fetchFolders = async (user) => {
     try {
-        do {
-            pageCount++;
-            const fetchUrl = nextPagePath ? `/api/vimeo?page=${encodeURIComponent(nextPagePath)}` : '/api/vimeo';
-            
-            const response = await fetch(fetchUrl, {
-                headers: { Authorization: `Bearer ${user.token.access_token}` },
-            });
+        const response = await fetch('/api/get-folders', {
+            headers: { Authorization: `Bearer ${user.token.access_token}` },
+        });
+        if (!response.ok) throw new Error('Could not fetch folders.');
 
-            if (!response.ok) throw new Error((await response.json()).error);
+        const { folders } = await response.json();
+        
+        // Populate the dropdown
+        folderFilter.innerHTML = ''; // Clear "loading" message
+        folders.sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically
+        folders.forEach(folder => {
+            const option = document.createElement('option');
+            // We store the folder's API URI in the value attribute
+            option.value = folder.uri; 
+            option.textContent = folder.name;
+            folderFilter.appendChild(option);
+        });
 
-            const pageData = await response.json();
-            allVideos = allVideos.concat(pageData.data);
-            nextPagePath = pageData.nextPagePath; // Get the next page path
-
-            // Update the UI with progress
-            videoTbody.innerHTML = `<tr><td colspan="6">Fetched ${allVideos.length} videos from ${pageCount} page(s)...</td></tr>`;
-
-        } while (nextPagePath); // Continue while there is a next page
-
-        // All pages are now fetched
-        populateFilter(allVideos);
-        filterAndRender();
+        // Enable the controls
+        folderFilter.disabled = false;
+        fetchBtn.disabled = false;
 
     } catch (error) {
-        console.error('Fetch Error:', error);
-        videoTbody.innerHTML = `<tr><td colspan="6" style="color: red;">Error: ${error.message}</td></tr>`;
+        folderFilter.innerHTML = `<option>Error loading folders</option>`;
+        console.error(error);
     }
 };
 
-// --- RENDER TABLE FUNCTION (Unchanged) ---
-const renderTable = (videosToRender) => {
-    videoTbody.innerHTML = '';
-    if (videosToRender.length === 0) {
-        videoTbody.innerHTML = '<tr><td colspan="6">No videos match the current filter.</td></tr>';
+// --- 2. FETCH VIDEOS ON BUTTON CLICK ---
+const fetchVideosByFolder = async () => {
+    const selectedFolderUri = folderFilter.value;
+    if (!selectedFolderUri) {
+        alert('Please select a folder.');
         return;
     }
-    videosToRender.forEach(video => {
+
+    // Show loading state
+    tableContainer.style.display = 'block';
+    videoTbody.innerHTML = `<tr><td colspan="5">Fetching videos from folder... This may take a moment.</td></tr>`;
+    fetchBtn.disabled = true;
+    fetchBtn.textContent = 'Fetching...';
+    
+    try {
+        const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
+            headers: { Authorization: `Bearer ${currentUser.token.access_token}` },
+        });
+        if (!response.ok) throw new Error((await response.json()).error);
+        
+        const { data } = await response.json();
+        renderTable(data);
+
+    } catch (error) {
+        videoTbody.innerHTML = `<tr><td colspan="5" style="color: red;">Error: ${error.message}</td></tr>`;
+    } finally {
+        fetchBtn.disabled = false;
+        fetchBtn.textContent = 'Fetch Videos';
+    }
+};
+
+// Attach listener to the button
+fetchBtn.addEventListener('click', fetchVideosByFolder);
+
+
+// --- 3. RENDER THE TABLE (Simplified) ---
+const renderTable = (videos) => {
+    videoTbody.innerHTML = '';
+    if (videos.length === 0) {
+        videoTbody.innerHTML = '<tr><td colspan="5">No videos found in this folder.</td></tr>';
+        return;
+    }
+    videos.forEach(video => {
         const row = document.createElement('tr');
-        const videoId = video.uri.split('/').pop();
-        const folderName = video.parent_folder ? video.parent_folder.name : '<em>No Folder</em>';
-        row.dataset.videoId = videoId;
+        row.dataset.videoId = video.uri.split('/').pop();
         row.innerHTML = `
             <td class="video-title" contenteditable="true">${video.name || ''}</td>
             <td class="video-description" contenteditable="true">${video.description || ''}</td>
             <td class="video-tags" contenteditable="true">${video.tags.map(tag => tag.name).join(', ')}</td>
-            <td>${folderName}</td>
             <td>${video.status}</td>
             <td><button class="save-btn">Save</button></td>
         `;
         videoTbody.appendChild(row);
-        row.querySelector('.save-btn').addEventListener('click', (event) => handleSave(event, currentUser));
+        row.querySelector('.save-btn').addEventListener('click', (e) => handleSave(e, currentUser));
     });
 };
 
-// --- POPULATE FOLDER FILTER (Unchanged) ---
-const populateFilter = (videos) => {
-    folderFilter.innerHTML = '<option value="all">All Folders</option>';
-    const folderNames = new Set();
-    videos.forEach(video => {
-        if (video.parent_folder) folderNames.add(video.parent_folder.name);
-    });
-    Array.from(folderNames).sort().forEach(name => {
-        const option = document.createElement('option');
-        option.value = name;
-        option.textContent = name;
-        folderFilter.appendChild(option);
-    });
-};
-
-// --- FILTER AND RENDER (Unchanged) ---
-const filterAndRender = () => {
-    const selectedFolder = folderFilter.value;
-    if (selectedFolder === 'all') {
-        renderTable(allVideos);
-    } else {
-        const filteredVideos = allVideos.filter(video => 
-            video.parent_folder && video.parent_folder.name === selectedFolder
-        );
-        renderTable(filteredVideos);
-    }
-};
-
-folderFilter.addEventListener('change', filterAndRender);
-
-// --- SAVE FUNCTION (Unchanged) ---
+// --- 4. SAVE FUNCTION (Unchanged) ---
 const handleSave = async (event, user) => {
+    // This function remains the same as before
     const saveButton = event.target;
     const row = saveButton.closest('tr');
     const videoId = row.dataset.videoId;
@@ -121,7 +117,6 @@ const handleSave = async (event, user) => {
         saveButton.textContent = 'Saved!';
         setTimeout(() => { saveButton.textContent = 'Save'; }, 2000);
     } catch (error) {
-        console.error('Save Error:', error);
         alert(`Error saving video: ${error.message}`);
         saveButton.textContent = 'Retry';
     } finally {
@@ -129,24 +124,24 @@ const handleSave = async (event, user) => {
     }
 };
 
-// --- IDENTITY AND EVENT LISTENERS (Unchanged) ---
+// --- 5. IDENTITY AND EVENT LISTENERS (Updated) ---
 document.addEventListener('DOMContentLoaded', () => {
     netlifyIdentity.on('login', (user) => {
         currentUser = user;
         appContainer.style.display = 'block';
-        fetchAllVideos(user);
+        fetchFolders(user); // Fetch folders right after login
     });
 
     netlifyIdentity.on('logout', () => {
         currentUser = null;
-        allVideos = [];
         appContainer.style.display = 'none';
-        videoTbody.innerHTML = '';
+        tableContainer.style.display = 'none';
+        folderFilter.innerHTML = '<option>Loading folders...</option>';
     });
 
     if (netlifyIdentity.currentUser()) {
         currentUser = netlifyIdentity.currentUser();
         appContainer.style.display = 'block';
-        fetchAllVideos(currentUser);
+        fetchFolders(currentUser);
     }
 });
