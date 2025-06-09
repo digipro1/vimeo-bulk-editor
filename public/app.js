@@ -9,7 +9,7 @@ const selectAllCheckbox = document.getElementById('select-all-checkbox');
 const applyBulkEditBtn = document.getElementById('apply-bulk-edit-btn');
 
 let currentUser = null;
-let selectedVideoIds = new Set(); // Use a Set for efficient add/delete
+let selectedVideoIds = new Set();
 
 // --- BULK EDIT LOGIC ---
 const updateBulkEditUI = () => {
@@ -225,13 +225,13 @@ const fetchFolders = async (user) => {
     }
 };
 
-
-// --- THIS BLOCK CONTAINS THE FIX ---
+// --- This entire block handles page setup and authentication ---
 document.addEventListener('DOMContentLoaded', () => {
-    // **THE FIX**: This event listener MUST be inside the DOMContentLoaded
-    // callback to ensure the 'folderFilter' element exists before we use it.
+    // **THE FIX**: This event listener MUST be inside this block.
+    // It waits until the HTML is loaded before trying to find the dropdown.
     folderFilter.addEventListener('change', fetchVideosByFolder);
 
+    // Setup Netlify Identity event listeners
     netlifyIdentity.on('login', (user) => {
         currentUser = user;
         appContainer.style.display = 'block';
@@ -254,6 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchFolders(user);
         }
     });
-
+    
+    // Initialize the widget
     netlifyIdentity.init();
 });
