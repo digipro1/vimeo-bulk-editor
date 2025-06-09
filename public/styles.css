@@ -112,9 +112,10 @@ td[contenteditable="true"]:focus {
     background-color: var(--light-text);
 }
 
-/* Button Styles (Save Button & Netlify Identity) */
-.save-btn,
-.netlify-identity-button {
+/* --- CSS FIX STARTS HERE --- */
+
+/* 1. We now ONLY style the .save-btn with the blue button style. */
+.save-btn {
     font-family: 'Montserrat', sans-serif;
     padding: 0.6rem 1.2rem;
     border: none;
@@ -127,8 +128,7 @@ td[contenteditable="true"]:focus {
     transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
-.save-btn:hover,
-.netlify-identity-button:hover {
+.save-btn:hover {
     background-color: #0056A0; /* Darker blue on hover */
     transform: translateY(-2px);
 }
@@ -139,10 +139,23 @@ td[contenteditable="true"]:focus {
     transform: none;
 }
 
-/* Style Netlify login/logout link specifically */
-[data-netlify-identity-button] {
-    background: none;
+/* 2. We style the Netlify widget elements to be plain text links. */
+/* This targets any link (a) or button (button) inside the widget container */
+[data-netlify-identity-button] a,
+[data-netlify-identity-button] button {
     color: var(--light-text);
-    font-weight: 600;
     text-decoration: none;
+    background: none;
+    border: none;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.5rem;
 }
+
+[data-netlify-identity-button] a:hover,
+[data-netlify-identity-button] button:hover {
+    text-decoration: underline;
+}
+/* --- CSS FIX ENDS HERE --- */
