@@ -14,13 +14,20 @@
     </header>
 
     <main id="app-container" style="display: none;">
+        <div id="filter-container">
+            <label for="folder-filter">Filter by Folder:</label>
+            <select id="folder-filter">
+                <option value="all">All Folders</option>
+            </select>
+        </div>
+
         <table id="video-table">
             <thead>
                 <tr>
                     <th>Title</th>
                     <th>Description</th>
                     <th>Tags</th>
-                    <th>Status</th>
+                    <th>Folder</th> <th>Status</th>
                     <th>Action</th>
                 </tr>
             </thead>
