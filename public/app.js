@@ -230,16 +230,16 @@ const fetchFolders = async (user) => {
     }
 };
 
-// --- THIS IS THE NEW, ROBUST INITIALIZATION LOGIC ---
-// We wait for the Netlify Identity widget to report that it's ready.
+// --- This is the robust initialization logic ---
+// It waits for the Netlify Identity widget to signal that it's ready.
 netlifyIdentity.on('init', (user) => {
-    // The 'init' event is fired when the widget is ready, and it returns
-    // a user object if someone is already logged in.
+    // The 'init' event is fired when the widget is ready.
+    // The user object will exist if someone is already logged in.
     initializeApp(user);
 });
 
 netlifyIdentity.on('login', (user) => {
-    // When a user logs in, we re-initialize the app with the new user.
+    // When a user logs in, re-initialize the app with the new user.
     initializeApp(user);
 });
 
