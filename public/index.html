@@ -13,21 +13,47 @@
     </header>
 
     <main id="app-container" style="display: none;">
-        <div id="controls-container">
+       <div id="controls-container">
             <div id="folder-selection">
                 <label for="folder-filter">Select a Folder:</label>
                 <select id="folder-filter" disabled>
                     <option>Loading folders...</option>
                 </select>
             </div>
+        
             <button id="manage-folder-btn" style="display: none;">Manage Folder</button>
+        
             <button id="save-all-btn" style="display: none;">Save All Changes</button>
+        </div>
+
+        <div id="bulk-edit-bar" style="display: none;">
+            <div class="bulk-edit-header">
+                <span id="selection-counter"></span>
+            </div>
+            <div class="bulk-edit-fields">
+                <div class="field-group">
+                    <label for="bulk-privacy">Privacy</label>
+                    <select id="bulk-privacy">
+                        <option value="">-- No Change --</option>
+                        <option value="anybody">Anybody</option>
+                        <option value="unlisted">Unlisted</option>
+                        <option value="password">Password</option>
+                        <option value="nobody">Nobody</option>
+                    </select>
+                </div>
+                <div class="field-group">
+                    <label for="bulk-tags">Add Tags (comma-separated)</label>
+                    <input type="text" id="bulk-tags" placeholder="e.g. newtag, anothertag">
+                </div>
+            </div>
+            <button id="apply-bulk-edit-btn">Apply to Selected</button>
         </div>
 
         <div id="table-container" style="display: none;">
             <table id="video-table">
                 <thead>
                     <tr>
+                        <th><input type="checkbox" id="select-all-checkbox"></th>
                         <th>Title</th>
                         <th>Description</th>
                         <th>Tags</th>
