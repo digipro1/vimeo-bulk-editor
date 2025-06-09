@@ -1,4 +1,3 @@
-// --- All variable definitions at the top are scoped globally for access ---
 const appContainer = document.getElementById('app-container');
 const folderFilter = document.getElementById('folder-filter');
 const tableContainer = document.getElementById('table-container');
@@ -11,9 +10,7 @@ const applyBulkEditBtn = document.getElementById('apply-bulk-edit-btn');
 let currentUser = null;
 let selectedVideoIds = new Set();
 
-// --- We wrap our entire application logic in a function ---
 const initializeApp = (user) => {
-    // Set up all event listeners now that we know the DOM and widget are ready
     folderFilter.addEventListener('change', fetchVideosByFolder);
     applyBulkEditBtn.addEventListener('click', handleBulkUpdate);
     selectAllCheckbox.addEventListener('click', () => {
@@ -30,7 +27,6 @@ const initializeApp = (user) => {
         updateBulkEditUI();
     });
 
-    // If a user is passed during initialization, start the app
     if (user) {
         currentUser = user;
         appContainer.style.display = 'block';
@@ -38,7 +34,6 @@ const initializeApp = (user) => {
     }
 };
 
-// --- All other functions remain the same ---
 const updateBulkEditUI = () => {
     const selectedCount = selectedVideoIds.size;
     if (selectedCount > 0) {
@@ -93,7 +88,7 @@ const handleBulkUpdate = async () => {
         try {
             const response = await fetch('/api/update-video', {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.token.access_token}` },
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer currentUser.token.access_token` },
                 body: JSON.stringify({ videoId, updates: finalUpdates }),
             });
             if (!response.ok) console.error(`Failed to update video ${videoId}`);
@@ -179,7 +174,7 @@ const fetchVideosByFolder = async () => {
     applyBulkEditBtn.disabled = true;
     try {
         const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
-            headers: { Authorization: `Bearer ${currentUser.token.access_token}` },
+            headers: { Authorization: `Bearer currentUser.token.access_token` },
         });
         if (!response.ok) throw new Error((await response.json()).error);
         const { data } = await response.json();
@@ -230,21 +225,15 @@ const fetchFolders = async (user) => {
     }
 };
 
-// --- This is the robust initialization logic ---
-// It waits for the Netlify Identity widget to signal that it's ready.
 netlifyIdentity.on('init', (user) => {
-    // The 'init' event is fired when the widget is ready.
-    // The user object will exist if someone is already logged in.
     initializeApp(user);
 });
 
 netlifyIdentity.on('login', (user) => {
-    // When a user logs in, re-initialize the app with the new user.
     initializeApp(user);
 });
 
 netlifyIdentity.on('logout', () => {
-    // When a user logs out, hide the main application.
     currentUser = null;
     appContainer.style.display = 'none';
     tableContainer.style.display = 'none';
