@@ -153,9 +153,22 @@ td[contenteditable="true"]:focus {
     cursor: pointer;
     padding: 0.5rem;
 }
+/* Style the links/buttons inside our new auth container */
+#auth-container a,
+#auth-container button {
+    color: var(--light-text);
+    text-decoration: none;
+    background: none;
+    border: none;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.5rem;
+}
 
-[data-netlify-identity-button] a:hover,
-[data-netlify-identity-button] button:hover {
+#auth-container a:hover,
+#auth-container button:hover {
     text-decoration: underline;
 }
 /* --- CSS FIX ENDS HERE --- */
