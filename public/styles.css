@@ -1,17 +1,72 @@
 body {
-    font-family: sans-serif;
-    margin: 2em;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    background-color: #f4f7f6;
 }
-.folder {
-    margin-bottom: 2em;
-    border: 1px solid #ccc;
-    padding: 1em;
+
+header {
+    background-color: #fff;
+    padding: 1em 2em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ddd;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 1.5em;
+}
+
+main {
+    padding: 2em;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+th, td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #f8f8f8;
+    font-weight: 600;
+}
+
+td[contenteditable="true"] {
+    background-color: #fffde7; /* Light yellow to indicate editable fields */
+    outline: none; /* Removes outline on focus */
+}
+
+td[contenteditable="true"]:focus {
+    box-shadow: inset 0 0 0 2px #007bff; /* Blue ring on focus */
+    background-color: #fff;
+}
+
+.save-btn {
+    padding: 8px 12px;
+    border: 1px solid #007bff;
+    background-color: #007bff;
+    color: white;
     border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
 }
-.video {
-    border-bottom: 1px solid #eee;
-    padding: 1em 0;
+
+.save-btn:hover {
+    background-color: #0056b3;
 }
-.video:last-child {
-    border-bottom: none;
+
+.save-btn:disabled {
+    background-color: #ccc;
+    border-color: #ccc;
+    cursor: not-allowed;
 }
