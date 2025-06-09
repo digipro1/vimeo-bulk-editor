@@ -331,3 +331,16 @@ td[contenteditable="true"]:focus {
     height: 40px; /* You can adjust this value to make your logo bigger or smaller */
     width: auto;
 }
+/* --- New Styles for Tags Field Placeholder --- */
+
+/* Target the tags cell when it's editable */
+.video-tags[contenteditable="true"] {
+    cursor: text;
+}
+
+/* When the tags cell is empty, show the placeholder text */
+.video-tags[contenteditable="true"]:empty::before {
+    content: "tag one, tag two, ...";
+    color: #999; /* A standard placeholder color */
+    font-style: italic;
+}
