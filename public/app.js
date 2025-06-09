@@ -2,7 +2,7 @@ const appContainer = document.getElementById('app-container');
 const folderFilter = document.getElementById('folder-filter');
 const tableContainer = document.getElementById('table-container');
 const videoTbody = document.getElementById('video-list');
-// NEW: Bulk Edit UI elements
+// Bulk Edit UI elements
 const bulkEditBar = document.getElementById('bulk-edit-bar');
 const selectionCounter = document.getElementById('selection-counter');
 const selectAllCheckbox = document.getElementById('select-all-checkbox');
@@ -11,7 +11,7 @@ const applyBulkEditBtn = document.getElementById('apply-bulk-edit-btn');
 let currentUser = null;
 let selectedVideoIds = new Set(); // Use a Set for efficient add/delete
 
-// --- NEW: BULK EDIT LOGIC ---
+// --- BULK EDIT LOGIC ---
 const updateBulkEditUI = () => {
     const selectedCount = selectedVideoIds.size;
     if (selectedCount > 0) {
@@ -63,12 +63,7 @@ const handleBulkUpdate = async () => {
     if (bulkPrivacy) {
         updates.privacy = { view: bulkPrivacy };
     }
-    if (bulkTags) {
-        // This will ADD the new tags to existing ones.
-        // We'll handle combining them in the save logic.
-        updates.tags = bulkTags; 
-    }
-
+    
     applyBulkEditBtn.textContent = 'Updating...';
     applyBulkEditBtn.disabled = true;
 
@@ -79,18 +74,16 @@ const handleBulkUpdate = async () => {
         count++;
         selectionCounter.textContent = `Updating ${count} of ${selectedVideoIds.size}...`;
         
-        // Find the corresponding row to get existing data if needed for tags
         const row = videoRows.find(r => r.dataset.videoId === videoId);
-        if (!row) continue; // Skip if row not found
+        if (!row) continue;
 
-        const currentTags = row.querySelector('.video-tags').textContent;
         let finalUpdates = { ...updates };
 
-        // Combine new tags with existing tags
-        if (updates.tags) {
+        if (bulkTags) {
+            const currentTags = row.querySelector('.video-tags').textContent;
             const existingTags = currentTags.split(',').map(t => t.trim()).filter(Boolean);
-            const newTags = updates.tags.split(',').map(t => t.trim()).filter(Boolean);
-            const combinedTags = [...new Set([...existingTags, ...newTags])]; // Use Set to ensure uniqueness
+            const newTags = bulkTags.split(',').map(t => t.trim()).filter(Boolean);
+            const combinedTags = [...new Set([...existingTags, ...newTags])];
             finalUpdates.tags = combinedTags.join(',');
         }
         
@@ -110,16 +103,14 @@ const handleBulkUpdate = async () => {
 
     alert('Bulk update complete!');
     applyBulkEditBtn.textContent = 'Apply to Selected';
-    applyBulkEditBtn.disabled = false;
     
-    // Refresh the folder view to see changes
     await fetchVideosByFolder();
 };
 
 applyBulkEditBtn.addEventListener('click', handleBulkUpdate);
 
 
-// --- RENDER THE TABLE (UPDATED) ---
+// --- RENDER THE TABLE ---
 const renderTable = (videos) => {
     videoTbody.innerHTML = '';
     if (videos.length === 0) {
@@ -151,7 +142,7 @@ const renderTable = (videos) => {
     updateBulkEditUI();
 };
 
-// --- SAVE FUNCTION (UNCHANGED) ---
+// --- SAVE FUNCTION ---
 const handleSave = async (event, user) => {
     const saveButton = event.target;
     const row = saveButton.closest('tr');
@@ -182,7 +173,7 @@ const handleSave = async (event, user) => {
     }
 };
 
-// --- FETCH VIDEOS BY FOLDER (UNCHANGED) ---
+// --- FETCH VIDEOS BY FOLDER ---
 const fetchVideosByFolder = async () => {
     const selectedFolderUri = folderFilter.value;
     if (!selectedFolderUri) {
@@ -193,6 +184,8 @@ const fetchVideosByFolder = async () => {
     tableContainer.style.display = 'block';
     videoTbody.innerHTML = `<tr><td colspan="8">Fetching videos from folder...</td></tr>`;
     folderFilter.disabled = true;
+    applyBulkEditBtn.disabled = true;
+
     try {
         const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
             headers: { Authorization: `Bearer ${currentUser.token.access_token}` },
@@ -204,10 +197,11 @@ const fetchVideosByFolder = async () => {
         videoTbody.innerHTML = `<tr><td colspan="8" style="color: red;">Error: ${error.message}</td></tr>`;
     } finally {
         folderFilter.disabled = false;
+        applyBulkEditBtn.disabled = false;
     }
 };
 
-// --- FETCH FOLDERS (UNCHANGED) ---
+// --- FETCH FOLDERS ---
 const fetchFolders = async (user) => {
     let allFolders = [];
     let nextPagePath = null;
@@ -222,7 +216,9 @@ const fetchFolders = async (user) => {
             const pageData = await response.json();
             allFolders = allFolders.concat(pageData.folders);
             nextPagePath = pageData.nextPagePath;
-            folderFilter.innerHTML = `<option>Loading folders, page ${pageCount + 1}...</option>`;
+            if(nextPagePath) {
+                folderFilter.innerHTML = `<option>Loading folders, page ${pageCount + 1}...</option>`;
+            }
         } while (nextPagePath);
         folderFilter.innerHTML = '';
         if (allFolders.length === 0) {
@@ -246,7 +242,7 @@ const fetchFolders = async (user) => {
 
 folderFilter.addEventListener('change', fetchVideosByFolder);
 
-// --- IDENTITY AND EVENT LISTENERS (UNCHANGED) ---
+// --- THIS ENTIRE BLOCK WAS MISSING ---
 document.addEventListener('DOMContentLoaded', () => {
     netlifyIdentity.on('login', (user) => {
         currentUser = user;
@@ -258,10 +254,18 @@ document.addEventListener('DOMContentLoaded', () => {
         appContainer.style.display = 'none';
         tableContainer.style.display = 'none';
         folderFilter.innerHTML = '<option>Loading folders...</option>';
+        // Hide bulk edit bar on logout
+        bulkEditBar.style.display = 'none';
+        selectedVideoIds.clear();
     });
-    if (netlifyIdentity.currentUser()) {
-        currentUser = netlifyIdentity.currentUser();
-        appContainer.style.display = 'block';
-        fetchFolders(currentUser);
-    }
+    // This is the correct way to check for an existing user
+    netlifyIdentity.on('init', (user) => {
+        if (user) {
+            currentUser = user;
+            appContainer.style.display = 'block';
+            fetchFolders(user);
+        }
+    });
+    // Manually init the widget
+    netlifyIdentity.init();
 });
