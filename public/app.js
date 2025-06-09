@@ -2,25 +2,60 @@ const appContainer = document.getElementById('app-container');
 const videoTbody = document.getElementById('video-list');
 const folderFilter = document.getElementById('folder-filter');
 
-let allVideos = []; // Global variable to store all fetched videos
-let currentUser = null; // Store the current user object
+let allVideos = [];
+let currentUser = null;
 
-// --- RENDER TABLE FUNCTION ---
-// Renders a given array of videos to the table
+// --- FETCH VIDEOS (REWRITTEN FOR PAGINATION) ---
+const fetchAllVideos = async (user) => {
+    let nextPagePath = null;
+    let pageCount = 0;
+    allVideos = []; // Reset the video list
+
+    const statusCell = document.querySelector('#video-list td');
+    videoTbody.innerHTML = '<tr><td colspan="6">Fetching page 1 from your library...</td></tr>';
+
+    try {
+        do {
+            pageCount++;
+            const fetchUrl = nextPagePath ? `/api/vimeo?page=${encodeURIComponent(nextPagePath)}` : '/api/vimeo';
+            
+            const response = await fetch(fetchUrl, {
+                headers: { Authorization: `Bearer ${user.token.access_token}` },
+            });
+
+            if (!response.ok) throw new Error((await response.json()).error);
+
+            const pageData = await response.json();
+            allVideos = allVideos.concat(pageData.data);
+            nextPagePath = pageData.nextPagePath; // Get the next page path
+
+            // Update the UI with progress
+            videoTbody.innerHTML = `<tr><td colspan="6">Fetched ${allVideos.length} videos from ${pageCount} page(s)...</td></tr>`;
+
+        } while (nextPagePath); // Continue while there is a next page
+
+        // All pages are now fetched
+        populateFilter(allVideos);
+        filterAndRender();
+
+    } catch (error) {
+        console.error('Fetch Error:', error);
+        videoTbody.innerHTML = `<tr><td colspan="6" style="color: red;">Error: ${error.message}</td></tr>`;
+    }
+};
+
+// --- RENDER TABLE FUNCTION (Unchanged) ---
 const renderTable = (videosToRender) => {
-    videoTbody.innerHTML = ''; // Clear the table
-
+    videoTbody.innerHTML = '';
     if (videosToRender.length === 0) {
         videoTbody.innerHTML = '<tr><td colspan="6">No videos match the current filter.</td></tr>';
         return;
     }
-
     videosToRender.forEach(video => {
         const row = document.createElement('tr');
         const videoId = video.uri.split('/').pop();
         const folderName = video.parent_folder ? video.parent_folder.name : '<em>No Folder</em>';
         row.dataset.videoId = videoId;
-
         row.innerHTML = `
             <td class="video-title" contenteditable="true">${video.name || ''}</td>
             <td class="video-description" contenteditable="true">${video.description || ''}</td>
@@ -34,19 +69,13 @@ const renderTable = (videosToRender) => {
     });
 };
 
-// --- POPULATE FOLDER FILTER ---
-// Creates the options for the folder dropdown
+// --- POPULATE FOLDER FILTER (Unchanged) ---
 const populateFilter = (videos) => {
-    folderFilter.innerHTML = '<option value="all">All Folders</option>'; // Reset
-    const folderNames = new Set(); // Use a Set to store only unique names
-    
+    folderFilter.innerHTML = '<option value="all">All Folders</option>';
+    const folderNames = new Set();
     videos.forEach(video => {
-        if (video.parent_folder) {
-            folderNames.add(video.parent_folder.name);
-        }
+        if (video.parent_folder) folderNames.add(video.parent_folder.name);
     });
-
-    // Sort folder names alphabetically and create options
     Array.from(folderNames).sort().forEach(name => {
         const option = document.createElement('option');
         option.value = name;
@@ -55,13 +84,11 @@ const populateFilter = (videos) => {
     });
 };
 
-// --- FILTER AND RENDER ---
-// This function filters `allVideos` based on the dropdown and calls renderTable
+// --- FILTER AND RENDER (Unchanged) ---
 const filterAndRender = () => {
     const selectedFolder = folderFilter.value;
-
     if (selectedFolder === 'all') {
-        renderTable(allVideos); // Render all videos
+        renderTable(allVideos);
     } else {
         const filteredVideos = allVideos.filter(video => 
             video.parent_folder && video.parent_folder.name === selectedFolder
@@ -70,63 +97,29 @@ const filterAndRender = () => {
     }
 };
 
-// Attach event listener to the dropdown
 folderFilter.addEventListener('change', filterAndRender);
-
-
-// --- FETCH VIDEOS (from login) ---
-// This is the main function called on login
-const fetchAllVideos = async (user) => {
-    videoTbody.innerHTML = '<tr><td colspan="6">Fetching all videos from your library... This may take a moment.</td></tr>';
-    try {
-        const response = await fetch('/api/vimeo?fields=uri,name,description,tags,status,parent_folder', {
-            headers: { Authorization: `Bearer ${user.token.access_token}` },
-        });
-
-        if (!response.ok) throw new Error((await response.json()).error);
-
-        const data = await response.json();
-        allVideos = data.data; // Store all videos globally
-        
-        populateFilter(allVideos); // Create the filter options
-        filterAndRender(); // Render the full table for the first time
-
-    } catch (error) {
-        console.error('Fetch Error:', error);
-        videoTbody.innerHTML = `<tr><td colspan="6" style="color: red;">Error: ${error.message}</td></tr>`;
-    }
-};
 
 // --- SAVE FUNCTION (Unchanged) ---
 const handleSave = async (event, user) => {
     const saveButton = event.target;
     const row = saveButton.closest('tr');
     const videoId = row.dataset.videoId;
-
     saveButton.textContent = 'Saving...';
     saveButton.disabled = true;
-
     const updates = {
         name: row.querySelector('.video-title').textContent,
         description: row.querySelector('.video-description').textContent,
         tags: row.querySelector('.video-tags').textContent,
     };
-
     try {
         const response = await fetch('/api/update-video', {
             method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${user.token.access_token}`,
-            },
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token.access_token}` },
             body: JSON.stringify({ videoId, updates }),
         });
-
         if (!response.ok) throw new Error((await response.json()).error);
-        
         saveButton.textContent = 'Saved!';
         setTimeout(() => { saveButton.textContent = 'Save'; }, 2000);
-
     } catch (error) {
         console.error('Save Error:', error);
         alert(`Error saving video: ${error.message}`);
@@ -136,7 +129,7 @@ const handleSave = async (event, user) => {
     }
 };
 
-// --- IDENTITY AND EVENT LISTENERS ---
+// --- IDENTITY AND EVENT LISTENERS (Unchanged) ---
 document.addEventListener('DOMContentLoaded', () => {
     netlifyIdentity.on('login', (user) => {
         currentUser = user;
@@ -151,7 +144,6 @@ document.addEventListener('DOMContentLoaded', () => {
         videoTbody.innerHTML = '';
     });
 
-    // Handle the case where the user is already logged in on page load
     if (netlifyIdentity.currentUser()) {
         currentUser = netlifyIdentity.currentUser();
         appContainer.style.display = 'block';
