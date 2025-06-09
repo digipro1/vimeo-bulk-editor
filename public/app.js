@@ -13,16 +13,20 @@ const fetchVideosByFolder = async () => {
         videoTbody.innerHTML = '<tr><td colspan="5">Please select a folder.</td></tr>';
         return;
     }
+
     tableContainer.style.display = 'block';
     videoTbody.innerHTML = `<tr><td colspan="5">Fetching videos from folder...</td></tr>`;
     folderFilter.disabled = true;
+    
     try {
         const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
             headers: { Authorization: `Bearer ${currentUser.token.access_token}` },
         });
         if (!response.ok) throw new Error((await response.json()).error);
+        
         const { data } = await response.json();
         renderTable(data);
+
     } catch (error) {
         videoTbody.innerHTML = `<tr><td colspan="5" style="color: red;">Error: ${error.message}</td></tr>`;
     } finally {
@@ -37,12 +41,15 @@ const fetchFolders = async (user) => {
             headers: { Authorization: `Bearer ${user.token.access_token}` },
         });
         if (!response.ok) throw new Error('Could not fetch folders.');
+
         const { folders } = await response.json();
+        
         folderFilter.innerHTML = '';
         if (folders.length === 0) {
             folderFilter.innerHTML = '<option value="">No folders found</option>';
             return;
         }
+
         folders.sort((a, b) => a.name.localeCompare(b.name));
         folders.forEach(folder => {
             const option = document.createElement('option');
@@ -50,8 +57,10 @@ const fetchFolders = async (user) => {
             option.textContent = folder.name;
             folderFilter.appendChild(option);
         });
+
         folderFilter.disabled = false;
         await fetchVideosByFolder();
+
     } catch (error) {
         folderFilter.innerHTML = `<option>Error loading folders</option>`;
         console.error(error);
@@ -111,13 +120,8 @@ const handleSave = async (event, user) => {
     }
 };
 
-// --- 5. IDENTITY AND EVENT LISTENERS (UPDATED) ---
+// --- 5. IDENTITY AND EVENT LISTENERS (Reverted to simpler version) ---
 document.addEventListener('DOMContentLoaded', () => {
-    // We take manual control of the widget
-    netlifyIdentity.init({
-        container: '#auth-container' // Tell the widget to live in our new div
-    });
-
     netlifyIdentity.on('login', (user) => {
         currentUser = user;
         appContainer.style.display = 'block';
@@ -131,12 +135,9 @@ document.addEventListener('DOMContentLoaded', () => {
         folderFilter.innerHTML = '<option>Loading folders...</option>';
     });
 
-    // This handles the case where a user is already logged in
-    netlifyIdentity.on('init', (user) => {
-        if (user) {
-            currentUser = user;
-            appContainer.style.display = 'block';
-            fetchFolders(user);
-        }
-    });
+    if (netlifyIdentity.currentUser()) {
+        currentUser = netlifyIdentity.currentUser();
+        appContainer.style.display = 'block';
+        fetchFolders(user);
+    }
 });
