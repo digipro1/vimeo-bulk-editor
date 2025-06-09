@@ -10,34 +10,42 @@ exports.handler = async (event, context) => {
     }
 
     const { VIMEO_API_TOKEN } = process.env;
-    // Get the requested fields from the query string, with defaults
     const params = new URLSearchParams(event.queryStringParameters);
     const fields = params.get('fields') || 'uri,name,description,tags,status,parent_folder';
-
+    
     let allVideos = [];
-    let nextPageUrl = `https://api.vimeo.com/me/videos?fields=${fields}&per_page=100`; // Start with 100 per page
-    let safetyCounter = 0; // Prevents accidental infinite loops
+    // The initial URL is absolute, which is correct.
+    let nextUrl = `https://api.vimeo.com/me/videos?fields=${fields}&per_page=100`;
+    let safetyCounter = 0;
 
     try {
         // Loop while there's a next page URL and we haven't hit our safety limit
-        while (nextPageUrl && safetyCounter < 50) {
-            const response = await fetch(nextPageUrl, {
+        while (nextUrl && safetyCounter < 50) {
+            const response = await fetch(nextUrl, { // On first loop, this is the full URL
                 headers: { Authorization: `Bearer ${VIMEO_API_TOKEN}` },
             });
 
             if (!response.ok) {
+                console.error("Vimeo API Error Response:", await response.text());
                 throw new Error('Failed to fetch videos from Vimeo.');
             }
 
             const pageData = await response.json();
-            allVideos = allVideos.concat(pageData.data); // Add the videos from this page to our list
-            nextPageUrl = pageData.paging.next; // Get the URL for the next page
+            allVideos = allVideos.concat(pageData.data);
+
+            // --- THIS IS THE FIX ---
+            // Check if the 'next' paging link exists and construct an absolute URL if it does.
+            if (pageData.paging && pageData.paging.next) {
+                nextUrl = `https://api.vimeo.com${pageData.paging.next}`;
+            } else {
+                nextUrl = null; // No more pages, so we stop the loop.
+            }
+            
             safetyCounter++;
         }
 
         return {
             statusCode: 200,
-            // We wrap our results in a 'data' object to match the original structure
             body: JSON.stringify({ data: allVideos }),
         };
 
