@@ -1,55 +1,25 @@
 const appContainer = document.getElementById('app-container');
 const folderFilter = document.getElementById('folder-filter');
-const fetchBtn = document.getElementById('fetch-videos-btn');
 const tableContainer = document.getElementById('table-container');
 const videoTbody = document.getElementById('video-list');
 
 let currentUser = null;
 
-// --- 1. FETCH FOLDERS ON LOGIN ---
-const fetchFolders = async (user) => {
-    try {
-        const response = await fetch('/api/get-folders', {
-            headers: { Authorization: `Bearer ${user.token.access_token}` },
-        });
-        if (!response.ok) throw new Error('Could not fetch folders.');
-
-        const { folders } = await response.json();
-        
-        // Populate the dropdown
-        folderFilter.innerHTML = ''; // Clear "loading" message
-        folders.sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically
-        folders.forEach(folder => {
-            const option = document.createElement('option');
-            // We store the folder's API URI in the value attribute
-            option.value = folder.uri; 
-            option.textContent = folder.name;
-            folderFilter.appendChild(option);
-        });
-
-        // Enable the controls
-        folderFilter.disabled = false;
-        fetchBtn.disabled = false;
-
-    } catch (error) {
-        folderFilter.innerHTML = `<option>Error loading folders</option>`;
-        console.error(error);
-    }
-};
-
-// --- 2. FETCH VIDEOS ON BUTTON CLICK ---
+// --- 1. FETCH VIDEOS BY FOLDER ---
+// This function is now triggered by the dropdown change event
 const fetchVideosByFolder = async () => {
     const selectedFolderUri = folderFilter.value;
     if (!selectedFolderUri) {
-        alert('Please select a folder.');
+        // This can happen if the folder list is empty.
+        tableContainer.style.display = 'block';
+        videoTbody.innerHTML = '<tr><td colspan="5">Please select a folder.</td></tr>';
         return;
     }
 
     // Show loading state
     tableContainer.style.display = 'block';
-    videoTbody.innerHTML = `<tr><td colspan="5">Fetching videos from folder... This may take a moment.</td></tr>`;
-    fetchBtn.disabled = true;
-    fetchBtn.textContent = 'Fetching...';
+    videoTbody.innerHTML = `<tr><td colspan="5">Fetching videos from folder...</td></tr>`;
+    folderFilter.disabled = true; // Disable dropdown during fetch
     
     try {
         const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
@@ -63,16 +33,48 @@ const fetchVideosByFolder = async () => {
     } catch (error) {
         videoTbody.innerHTML = `<tr><td colspan="5" style="color: red;">Error: ${error.message}</td></tr>`;
     } finally {
-        fetchBtn.disabled = false;
-        fetchBtn.textContent = 'Fetch Videos';
+        folderFilter.disabled = false; // Re-enable dropdown
     }
 };
 
-// Attach listener to the button
-fetchBtn.addEventListener('click', fetchVideosByFolder);
+// --- 2. FETCH FOLDERS ON LOGIN ---
+const fetchFolders = async (user) => {
+    try {
+        const response = await fetch('/api/get-folders', {
+            headers: { Authorization: `Bearer ${user.token.access_token}` },
+        });
+        if (!response.ok) throw new Error('Could not fetch folders.');
 
+        const { folders } = await response.json();
+        
+        folderFilter.innerHTML = '';
+        if (folders.length === 0) {
+            folderFilter.innerHTML = '<option value="">No folders found</option>';
+            return;
+        }
 
-// --- 3. RENDER THE TABLE (Simplified) ---
+        folders.sort((a, b) => a.name.localeCompare(b.name));
+        folders.forEach(folder => {
+            const option = document.createElement('option');
+            option.value = folder.uri;
+            option.textContent = folder.name;
+            folderFilter.appendChild(option);
+        });
+
+        folderFilter.disabled = false;
+        // **NEW**: Automatically fetch videos for the first folder in the list
+        await fetchVideosByFolder();
+
+    } catch (error) {
+        folderFilter.innerHTML = `<option>Error loading folders</option>`;
+        console.error(error);
+    }
+};
+
+// **NEW**: Attach the event listener directly to the folder dropdown
+folderFilter.addEventListener('change', fetchVideosByFolder);
+
+// --- 3. RENDER THE TABLE (Unchanged) ---
 const renderTable = (videos) => {
     videoTbody.innerHTML = '';
     if (videos.length === 0) {
@@ -96,7 +98,6 @@ const renderTable = (videos) => {
 
 // --- 4. SAVE FUNCTION (Unchanged) ---
 const handleSave = async (event, user) => {
-    // This function remains the same as before
     const saveButton = event.target;
     const row = saveButton.closest('tr');
     const videoId = row.dataset.videoId;
@@ -124,12 +125,12 @@ const handleSave = async (event, user) => {
     }
 };
 
-// --- 5. IDENTITY AND EVENT LISTENERS (Updated) ---
+// --- 5. IDENTITY AND EVENT LISTENERS (Unchanged) ---
 document.addEventListener('DOMContentLoaded', () => {
     netlifyIdentity.on('login', (user) => {
         currentUser = user;
         appContainer.style.display = 'block';
-        fetchFolders(user); // Fetch folders right after login
+        fetchFolders(user);
     });
 
     netlifyIdentity.on('logout', () => {
