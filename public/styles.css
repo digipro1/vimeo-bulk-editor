@@ -42,13 +42,14 @@ main {
     padding: 2rem;
 }
 
-/* Controls Container */
+/* Controls (Folder Dropdown) */
 #controls-container {
     background-color: #fff;
     padding: 1rem 1.5rem;
     border-radius: 8px;
     margin-bottom: 2rem;
     box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    /* NEW Flexbox properties for layout */
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -71,7 +72,7 @@ main {
 
 /* Table Styles */
 #table-container {
-    background-color: #fff;
+    background-color: var(--light-text);
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.05);
     overflow-x: auto; /* For responsiveness */
@@ -115,7 +116,9 @@ td[contenteditable="true"]:focus {
     background-color: var(--light-text);
 }
 
-/* Button Styles */
+/* --- CSS FIX STARTS HERE --- */
+
+/* 1. We now ONLY style the .save-btn with the blue button style. */
 .save-btn {
     font-family: 'Montserrat', sans-serif;
     padding: 0.6rem 1.2rem;
@@ -140,6 +143,8 @@ td[contenteditable="true"]:focus {
     transform: none;
 }
 
+/* 2. We style the Netlify widget elements to be plain text links. */
+/* This targets any link (a) or button (button) inside the widget container */
 [data-netlify-identity-button] a,
 [data-netlify-identity-button] button {
     color: var(--light-text);
@@ -152,18 +157,119 @@ td[contenteditable="true"]:focus {
     cursor: pointer;
     padding: 0.5rem;
 }
-
-[data-netlify-identity-button] a:hover,
-[data-netlify-identity-button] button:hover {
-    text-decoration: underline;
+/* Style the links/buttons inside our new auth container */
+#auth-container a,
+#auth-container button {
+    color: var(--light-text);
+    text-decoration: none;
+    background: none;
+    border: none;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.5rem;
 }
 
-/* Rule to hide duplicate login buttons */
+#auth-container a:hover,
+#auth-container button:hover {
+    text-decoration: underline;
+}
+/* --- NEW RULE TO FIX DUPLICATE BUTTON --- */
+/* This targets any link that is an immediate sibling of another link
+   inside the widget, and hides it. */
 [data-netlify-identity-button] a + a {
     display: none;
 }
+/* --- CSS FIX ENDS HERE --- */
+/* Style for the new privacy dropdown */
+.privacy-select {
+    font-family: 'Montserrat', sans-serif;
+    padding: 0.5rem;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    width: 100%; /* Make it fill the cell */
+}
 
-/* Style for the "Save All" button */
+/* Style for the new "Manage" link */
+.manage-link {
+    font-weight: 600;
+    color: var(--accent-blue);
+    text-decoration: none;
+}
+
+.manage-link:hover {
+    text-decoration: underline;
+}
+/* --- Bulk Edit Bar Styles --- */
+#bulk-edit-bar {
+    background-color: var(--editable-bg);
+    border: 1px solid var(--accent-blue);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.bulk-edit-header {
+    margin-bottom: 1rem;
+}
+
+#selection-counter {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--dark-bg);
+}
+
+.bulk-edit-fields {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.field-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.field-group label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+#bulk-edit-bar input[type="text"],
+#bulk-edit-bar select {
+    font-family: 'Montserrat', sans-serif;
+    padding: 0.75rem;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    min-width: 250px;
+}
+
+#apply-bulk-edit-btn {
+    font-family: 'Montserrat', sans-serif;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    background-color: #28a745; /* Green for apply action */
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: background-color 0.2s ease;
+}
+
+#apply-bulk-edit-btn:hover {
+    background-color: #218838; /* Darker green */
+}
+
+#apply-bulk-edit-btn:disabled {
+    background-color: #B0BEC5;
+    cursor: not-allowed;
+}
+/* Style for the new "Save All" button */
 #save-all-btn {
     font-family: 'Montserrat', sans-serif;
     padding: 0.75rem 1.5rem;
@@ -175,6 +281,7 @@ td[contenteditable="true"]:focus {
     font-weight: 600;
     font-size: 1rem;
     transition: background-color 0.2s ease;
+    margin-left: 1rem; /* Add some space next to the dropdown */
 }
 
 #save-all-btn:hover {
@@ -185,8 +292,7 @@ td[contenteditable="true"]:focus {
     background-color: #B0BEC5;
     cursor: not-allowed;
 }
-
-/* Style for the "Manage Folder" button */
+/* Style for the new "Manage Folder" button */
 #manage-folder-btn {
     font-family: 'Montserrat', sans-serif;
     padding: 0.75rem 1.5rem;
@@ -210,24 +316,4 @@ td[contenteditable="true"]:focus {
     border-color: #B0BEC5;
     color: white;
     cursor: not-allowed;
-}
-
-/* Style for the privacy dropdown */
-.privacy-select {
-    font-family: 'Montserrat', sans-serif;
-    padding: 0.5rem;
-    border-radius: 5px;
-    border: 1px solid #ccc;
-    width: 100%; /* Make it fill the cell */
-}
-
-/* Style for the "Manage" link */
-.manage-link {
-    font-weight: 600;
-    color: var(--accent-blue);
-    text-decoration: none;
-}
-
-.manage-link:hover {
-    text-decoration: underline;
 }
