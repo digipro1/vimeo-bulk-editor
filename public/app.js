@@ -20,7 +20,6 @@ const updateBulkEditUI = () => {
     } else {
         bulkEditBar.style.display = 'none';
     }
-    // Sync "Select All" checkbox state
     const totalCheckboxes = document.querySelectorAll('.video-checkbox').length;
     selectAllCheckbox.checked = totalCheckboxes > 0 && selectedCount === totalCheckboxes;
 };
@@ -53,32 +52,24 @@ selectAllCheckbox.addEventListener('click', () => {
 const handleBulkUpdate = async () => {
     const bulkPrivacy = document.getElementById('bulk-privacy').value;
     const bulkTags = document.getElementById('bulk-tags').value;
-
     if (!bulkPrivacy && !bulkTags) {
         alert('Please choose a privacy setting or enter tags to apply.');
         return;
     }
-
     const updates = {};
     if (bulkPrivacy) {
         updates.privacy = { view: bulkPrivacy };
     }
-    
     applyBulkEditBtn.textContent = 'Updating...';
     applyBulkEditBtn.disabled = true;
-
     let count = 0;
     const videoRows = Array.from(videoTbody.querySelectorAll('tr'));
-
     for (const videoId of selectedVideoIds) {
         count++;
         selectionCounter.textContent = `Updating ${count} of ${selectedVideoIds.size}...`;
-        
         const row = videoRows.find(r => r.dataset.videoId === videoId);
         if (!row) continue;
-
         let finalUpdates = { ...updates };
-
         if (bulkTags) {
             const currentTags = row.querySelector('.video-tags').textContent;
             const existingTags = currentTags.split(',').map(t => t.trim()).filter(Boolean);
@@ -86,7 +77,6 @@ const handleBulkUpdate = async () => {
             const combinedTags = [...new Set([...existingTags, ...newTags])];
             finalUpdates.tags = combinedTags.join(',');
         }
-        
         try {
             const response = await fetch('/api/update-video', {
                 method: 'PATCH',
@@ -100,15 +90,12 @@ const handleBulkUpdate = async () => {
             console.error(`Error updating video ${videoId}:`, error);
         }
     }
-
     alert('Bulk update complete!');
     applyBulkEditBtn.textContent = 'Apply to Selected';
-    
     await fetchVideosByFolder();
 };
 
 applyBulkEditBtn.addEventListener('click', handleBulkUpdate);
-
 
 // --- RENDER THE TABLE ---
 const renderTable = (videos) => {
@@ -123,7 +110,6 @@ const renderTable = (videos) => {
         const videoId = video.uri.split('/').pop();
         row.dataset.videoId = videoId;
         const privacyDropdown = `<select class="privacy-select">${privacyOptions.map(opt => `<option value="${opt}" ${video.privacy.view === opt ? 'selected' : ''}>${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`).join('')}</select>`;
-        
         row.innerHTML = `
             <td><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
             <td class="video-title" contenteditable="true">${video.name || ''}</td>
@@ -185,7 +171,6 @@ const fetchVideosByFolder = async () => {
     videoTbody.innerHTML = `<tr><td colspan="8">Fetching videos from folder...</td></tr>`;
     folderFilter.disabled = true;
     applyBulkEditBtn.disabled = true;
-
     try {
         const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
             headers: { Authorization: `Bearer ${currentUser.token.access_token}` },
@@ -240,25 +225,28 @@ const fetchFolders = async (user) => {
     }
 };
 
-folderFilter.addEventListener('change', fetchVideosByFolder);
 
-// --- THIS ENTIRE BLOCK WAS MISSING ---
+// --- THIS BLOCK CONTAINS THE FIX ---
 document.addEventListener('DOMContentLoaded', () => {
+    // **THE FIX**: This event listener MUST be inside the DOMContentLoaded
+    // callback to ensure the 'folderFilter' element exists before we use it.
+    folderFilter.addEventListener('change', fetchVideosByFolder);
+
     netlifyIdentity.on('login', (user) => {
         currentUser = user;
         appContainer.style.display = 'block';
         fetchFolders(user);
     });
+
     netlifyIdentity.on('logout', () => {
         currentUser = null;
         appContainer.style.display = 'none';
         tableContainer.style.display = 'none';
         folderFilter.innerHTML = '<option>Loading folders...</option>';
-        // Hide bulk edit bar on logout
         bulkEditBar.style.display = 'none';
         selectedVideoIds.clear();
     });
-    // This is the correct way to check for an existing user
+
     netlifyIdentity.on('init', (user) => {
         if (user) {
             currentUser = user;
@@ -266,6 +254,6 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchFolders(user);
         }
     });
-    // Manually init the widget
+
     netlifyIdentity.init();
 });
