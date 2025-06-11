@@ -13,13 +13,14 @@ let currentUser = null;
 let originalVideoData = new Map();
 let selectedVideoIds = new Set(); 
 
-// --- RENDER TABLE ---
 const renderTable = (videos) => {
     videoTbody.innerHTML = '';
     originalVideoData.clear();
     saveAllBtn.style.display = 'none';
     manageFolderBtn.style.display = 'none';
-    if(bulkEditBar) bulkEditBar.style.display = 'none';
+    if(bulkEditBar) {
+        bulkEditBar.style.display = 'none';
+    }
 
     if (videos.length === 0) {
         videoTbody.innerHTML = '<tr><td colspan="8">No videos found in this folder.</td></tr>';
@@ -60,15 +61,6 @@ const renderTable = (videos) => {
     updateBulkEditUI();
 };
 
-// --- HELPER FUNCTION TO PARSE TAGS ---
-// This new helper function will reliably parse tags from a string into an array.
-const parseTags = (tagString) => {
-    // Splits by commas or spaces, trims whitespace, and removes empty entries.
-    return tagString.split(/[\s,]+/).map(tag => tag.trim()).filter(Boolean);
-};
-
-
-// --- INDIVIDUAL SAVE FUNCTION (UPDATED) ---
 const handleSave = async (event, user) => {
     const saveButton = event.target;
     const row = saveButton.closest('tr');
@@ -76,13 +68,12 @@ const handleSave = async (event, user) => {
     saveButton.textContent = 'Saving...';
     saveButton.disabled = true;
     
-    // **THE FIX IS HERE**: We now use our helper function to create a proper array.
-    const tagsArray = parseTags(row.querySelector('.video-tags').textContent);
+    const cleanTags = row.querySelector('.video-tags').textContent.split(/[\s,]+/).map(tag => tag.trim()).filter(Boolean);
 
     const updates = {
         name: row.querySelector('.video-title').textContent,
         description: row.querySelector('.video-description').textContent,
-        tags: tagsArray, // Send the cleaned array to the API
+        tags: cleanTags,
         privacy: { view: row.querySelector('.privacy-select').value }
     };
 
@@ -94,7 +85,6 @@ const handleSave = async (event, user) => {
         });
         if (!response.ok) throw new Error((await response.json()).error);
         saveButton.textContent = 'Saved!';
-        // Update original data with a comma-separated string for display consistency
         originalVideoData.set(videoId, { ...updates, tags: updates.tags.join(', '), privacy: updates.privacy.view });
         setTimeout(() => { saveButton.textContent = 'Save'; }, 2000);
     } catch (error) {
@@ -105,77 +95,24 @@ const handleSave = async (event, user) => {
     }
 };
 
-
-// --- SAVE ALL CHANGES FUNCTION (UPDATED) ---
-const handleSaveAll = async () => {
-    const changedRows = [];
-    const allRows = videoTbody.querySelectorAll('tr');
-
-    allRows.forEach(row => {
-        const videoId = row.dataset.videoId;
-        if (!videoId) return;
-
-        const original = originalVideoData.get(videoId);
-        const currentTagsArray = parseTags(row.querySelector('.video-tags').textContent);
-
-        const current = {
-            name: row.querySelector('.video-title').textContent,
-            description: row.querySelector('.video-description').textContent,
-            tags: currentTagsArray.join(', '), // Compare as a standardized string
-            privacy: row.querySelector('.privacy-select').value,
-        };
-
-        if (original.name !== current.name || original.description !== current.description || original.tags !== current.tags || original.privacy !== current.privacy) {
-            // Add the array version to the update package
-            changedRows.push({ videoId, updates: { ...current, tags: currentTagsArray, privacy: { view: current.privacy } } });
-        }
-    });
-
-    if (changedRows.length === 0) {
-        alert('No changes to save.');
-        return;
-    }
-
-    saveAllBtn.textContent = 'Saving...';
-    saveAllBtn.disabled = true;
-    folderFilter.disabled = true;
-    manageFolderBtn.disabled = true;
-
-    let successCount = 0;
-    for (let i = 0; i < changedRows.length; i++) {
-        const { videoId, updates } = changedRows[i];
-        saveAllBtn.textContent = `Saving ${i + 1} of ${changedRows.length}...`;
-        try {
-            const response = await fetch('/api/update-video', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.token.access_token}` },
-                body: JSON.stringify({ videoId, updates }),
-            });
-            if (response.ok) successCount++;
-        } catch (error) {
-            console.error(`Failed to save video ${videoId}:`, error);
-        }
-    }
-
-    alert(`Saved ${successCount} of ${changedRows.length} changed videos.`);
-    saveAllBtn.textContent = 'Save All Changes';
-    saveAllBtn.disabled = false;
-    folderFilter.disabled = false;
-    manageFolderBtn.disabled = false;
-    await fetchVideosByFolder();
-};
-
-
-// --- All other functions and listeners remain the same ---
-
 const fetchVideosByFolder = async () => {
     const selectedFolderUri = folderFilter.value;
     if (!selectedFolderUri) {
-        tableContainer.style.display = 'none'; videoTbody.innerHTML = ''; saveAllBtn.style.display = 'none'; manageFolderBtn.style.display = 'none'; if(bulkEditBar) bulkEditBar.style.display = 'none'; return;
+        tableContainer.style.display = 'none';
+        videoTbody.innerHTML = '';
+        saveAllBtn.style.display = 'none';
+        manageFolderBtn.style.display = 'none';
+        if(bulkEditBar) bulkEditBar.style.display = 'none';
+        return;
     }
+
     tableContainer.style.display = 'block';
     videoTbody.innerHTML = `<tr><td colspan="8">Fetching videos from folder...</td></tr>`;
-    folderFilter.disabled = true; saveAllBtn.style.display = 'none'; manageFolderBtn.style.display = 'none'; if(bulkEditBar) bulkEditBar.style.display = 'none';
+    folderFilter.disabled = true;
+    saveAllBtn.style.display = 'none';
+    manageFolderBtn.style.display = 'none';
+    if(bulkEditBar) bulkEditBar.style.display = 'none';
+
     try {
         const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
             headers: { Authorization: `Bearer ${currentUser.token.access_token}` },
@@ -192,7 +129,8 @@ const fetchVideosByFolder = async () => {
 
 const fetchFolders = async (user) => {
     try {
-        let allFolders = []; let nextPagePath = null;
+        let allFolders = [];
+        let nextPagePath = null;
         do {
             const fetchUrl = nextPagePath ? `/api/get-folders?page=${encodeURIComponent(nextPagePath)}` : '/api/get-folders';
             const response = await fetch(fetchUrl, { headers: { Authorization: `Bearer ${user.token.access_token}` } });
@@ -201,28 +139,37 @@ const fetchFolders = async (user) => {
             allFolders = allFolders.concat(pageData.folders);
             nextPagePath = pageData.nextPagePath;
         } while (nextPagePath);
+
         folderFilter.innerHTML = '';
         const defaultOption = document.createElement('option');
-        defaultOption.value = ""; defaultOption.textContent = "Select a folder..."; defaultOption.selected = true; defaultOption.disabled = true;
+        defaultOption.value = "";
+        defaultOption.textContent = "Select a folder...";
+        defaultOption.selected = true;
+        defaultOption.disabled = true;
         folderFilter.appendChild(defaultOption);
+
         if (allFolders.length > 0) {
             allFolders.sort((a, b) => a.name.localeCompare(b.name));
             allFolders.forEach(folder => {
                 const option = document.createElement('option');
-                option.value = folder.uri; option.textContent = folder.name; option.dataset.link = folder.link; 
+                option.value = folder.uri;
+                option.textContent = folder.name;
+                option.dataset.link = folder.link; 
                 folderFilter.appendChild(option);
             });
         }
         folderFilter.disabled = false;
     } catch (error) {
-        folderFilter.innerHTML = `<option>Error loading folders</option>`; console.error(error);
+        folderFilter.innerHTML = `<option>Error loading folders</option>`;
+        console.error(error);
     }
 };
 
 const updateBulkEditUI = () => {
     const selectedCount = selectedVideoIds.size;
     if (selectedCount > 0) {
-        bulkEditBar.style.display = 'block'; selectionCounter.textContent = `${selectedCount} video(s) selected`;
+        bulkEditBar.style.display = 'block';
+        selectionCounter.textContent = `${selectedCount} video(s) selected`;
     } else {
         bulkEditBar.style.display = 'none';
     }
@@ -241,6 +188,60 @@ const handleSelectionChange = (event) => {
     updateBulkEditUI();
 };
 
+const handleSaveAll = async () => {
+    const changedRows = [];
+    const allRows = videoTbody.querySelectorAll('tr');
+
+    allRows.forEach(row => {
+        const videoId = row.dataset.videoId;
+        if (!videoId) return;
+
+        const original = originalVideoData.get(videoId);
+        const currentCleanTags = row.querySelector('.video-tags').textContent.split(/[\s,]+/).map(tag => tag.trim()).filter(Boolean);
+        const current = {
+            name: row.querySelector('.video-title').textContent,
+            description: row.querySelector('.video-description').textContent,
+            tags: currentCleanTags.join(', '),
+            privacy: row.querySelector('.privacy-select').value,
+        };
+
+        if (original.name !== current.name || original.description !== current.description || original.tags !== current.tags || original.privacy !== current.privacy) {
+            changedRows.push({ videoId, updates: { ...current, tags: currentCleanTags, privacy: { view: current.privacy } } });
+        }
+    });
+
+    if (changedRows.length === 0) {
+        alert('No changes to save.');
+        return;
+    }
+
+    saveAllBtn.textContent = 'Saving...';
+    saveAllBtn.disabled = true;
+    folderFilter.disabled = true;
+    manageFolderBtn.disabled = true;
+    let successCount = 0;
+    for (let i = 0; i < changedRows.length; i++) {
+        const { videoId, updates } = changedRows[i];
+        saveAllBtn.textContent = `Saving ${i + 1} of ${changedRows.length}...`;
+        try {
+            const response = await fetch('/api/update-video', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.token.access_token}` },
+                body: JSON.stringify({ videoId, updates }),
+            });
+            if (response.ok) successCount++;
+        } catch (error) {
+            console.error(`Failed to save video ${videoId}:`, error);
+        }
+    }
+    alert(`Saved ${successCount} of ${changedRows.length} changed videos.`);
+    saveAllBtn.textContent = 'Save All Changes';
+    saveAllBtn.disabled = false;
+    folderFilter.disabled = false;
+    manageFolderBtn.disabled = false;
+    await fetchVideosByFolder();
+};
+
 const handleManageFolder = () => {
     const selectedOption = folderFilter.options[folderFilter.selectedIndex];
     const folderLink = selectedOption.dataset.link;
@@ -255,21 +256,44 @@ document.addEventListener('DOMContentLoaded', () => {
     folderFilter.addEventListener('change', fetchVideosByFolder);
     saveAllBtn.addEventListener('click', handleSaveAll);
     manageFolderBtn.addEventListener('click', handleManageFolder);
+
+    // **THE FIX IS HERE**: This logic is now more direct and efficient.
     selectAllCheckbox.addEventListener('click', () => {
         const allCheckboxes = document.querySelectorAll('.video-checkbox');
-        allCheckboxes.forEach(checkbox => {
-            checkbox.checked = selectAllCheckbox.checked;
-            handleSelectionChange({ target: checkbox });
-        });
+        // If the "Select All" is checked, we add all video IDs to our set.
+        if (selectAllCheckbox.checked) {
+            allCheckboxes.forEach(checkbox => {
+                checkbox.checked = true;
+                selectedVideoIds.add(checkbox.dataset.videoId);
+            });
+        } else {
+            // If it's unchecked, we clear the set entirely.
+            allCheckboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            selectedVideoIds.clear();
+        }
+        // Finally, update the UI just once after all changes are made.
+        updateBulkEditUI();
     });
+
     netlifyIdentity.on('login', (user) => {
-        currentUser = user; appContainer.style.display = 'block'; fetchFolders(user);
-    });
+        currentUser = user;
+        appContainer.style.display = 'block';
+        fetchFolders(user);
+});
     netlifyIdentity.on('logout', () => {
-        currentUser = null; appContainer.style.display = 'none'; tableContainer.style.display = 'none'; saveAllBtn.style.display = 'none'; manageFolderBtn.style.display = 'none'; if (bulkEditBar) bulkEditBar.style.display = 'none';
+        currentUser = null;
+        appContainer.style.display = 'none';
+        tableContainer.style.display = 'none';
+        saveAllBtn.style.display = 'none';
+        manageFolderBtn.style.display = 'none';
+        if (bulkEditBar) bulkEditBar.style.display = 'none';
     });
     const user = netlifyIdentity.currentUser();
     if (user) {
-        currentUser = user; appContainer.style.display = 'block'; fetchFolders(user);
+        currentUser = user;
+        appContainer.style.display = 'block';
+        fetchFolders(user);
     }
 });
