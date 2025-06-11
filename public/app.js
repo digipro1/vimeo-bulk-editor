@@ -13,8 +13,6 @@ let currentUser = null;
 let originalVideoData = new Map();
 let selectedVideoIds = new Set(); 
 
-// --- NEW HELPER FUNCTION ---
-// This function takes seconds and returns a formatted MM:SS or HH:MM:SS string.
 const formatDuration = (seconds) => {
     if (isNaN(seconds) || seconds < 0) {
         return '0:00';
@@ -32,8 +30,6 @@ const formatDuration = (seconds) => {
     return `${minutes}:${paddedSecs}`;
 };
 
-
-// --- RENDER TABLE (UPDATED) ---
 const renderTable = (videos) => {
     videoTbody.innerHTML = '';
     originalVideoData.clear();
@@ -41,7 +37,6 @@ const renderTable = (videos) => {
     manageFolderBtn.style.display = 'none';
     if(bulkEditBar) bulkEditBar.style.display = 'none';
 
-    // **FIX**: The colspan should be 9 to match the new header.
     if (videos.length === 0) {
         videoTbody.innerHTML = '<tr><td colspan="9">No videos found in this folder.</td></tr>';
         return;
@@ -60,7 +55,6 @@ const renderTable = (videos) => {
         row.dataset.videoId = videoId;
         const privacyDropdown = `<select class="privacy-select">${privacyOptions.map(opt => `<option value="${opt}" ${video.privacy.view === opt ? 'selected' : ''}>${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`).join('')}</select>`;
         
-        // **UPDATE**: Added the new <td> for duration.
         row.innerHTML = `
             <td><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
             <td class="video-title" contenteditable="true">${video.name || ''}</td>
@@ -83,8 +77,6 @@ const renderTable = (videos) => {
     updateBulkEditUI();
 };
 
-
-// --- FETCH VIDEOS BY FOLDER (UPDATED) ---
 const fetchVideosByFolder = async () => {
     const selectedFolderUri = folderFilter.value;
     if (!selectedFolderUri) {
@@ -92,7 +84,6 @@ const fetchVideosByFolder = async () => {
     }
 
     tableContainer.style.display = 'block';
-    // **FIX**: The colspan should be 9.
     videoTbody.innerHTML = `<tr><td colspan="9">Fetching videos from folder...</td></tr>`;
     folderFilter.disabled = true; saveAllBtn.style.display = 'none'; manageFolderBtn.style.display = 'none'; if(bulkEditBar) bulkEditBar.style.display = 'none';
 
@@ -109,9 +100,6 @@ const fetchVideosByFolder = async () => {
         folderFilter.disabled = false;
     }
 };
-
-
-// --- All other functions are unchanged ---
 
 const handleSave = async (event, user) => {
     const saveButton = event.target;
@@ -195,6 +183,57 @@ const handleSelectionChange = (event) => {
     updateBulkEditUI();
 };
 
+// **THIS IS THE MISSING FUNCTION THAT WE ARE RESTORING**
+const handleSaveAll = async () => {
+    const changedRowsData = [];
+    const allRows = videoTbody.querySelectorAll('tr');
+
+    allRows.forEach(row => {
+        const videoId = row.dataset.videoId;
+        if (!videoId) return;
+
+        const original = originalVideoData.get(videoId);
+        const currentCleanTags = row.querySelector('.video-tags').textContent.split(/[\s,]+/).map(tag => tag.trim()).filter(Boolean);
+        const current = {
+            name: row.querySelector('.video-title').textContent,
+            description: row.querySelector('.video-description').textContent,
+            tags: currentCleanTags.join(', '),
+            privacy: row.querySelector('.privacy-select').value,
+        };
+
+        if (original.name !== current.name || original.description !== current.description || original.tags !== current.tags || original.privacy !== current.privacy) {
+            changedRowsData.push({ videoId, updates: { ...current, tags: currentCleanTags, privacy: { view: current.privacy } } });
+        }
+    });
+
+    if (changedRowsData.length === 0) {
+        alert('No changes to save.');
+        return;
+    }
+
+    saveAllBtn.textContent = 'Saving...';
+    saveAllBtn.disabled = true;
+    let successCount = 0;
+    for (let i = 0; i < changedRowsData.length; i++) {
+        const { videoId, updates } = changedRowsData[i];
+        saveAllBtn.textContent = `Saving ${i + 1} of ${changedRowsData.length}...`;
+        try {
+            const response = await fetch('/api/update-video', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.token.access_token}` },
+                body: JSON.stringify({ videoId, updates }),
+            });
+            if (response.ok) successCount++;
+        } catch (error) {
+            console.error(`Failed to save video ${videoId}:`, error);
+        }
+    }
+
+    alert(`Saved ${successCount} of ${changedRowsData.length} changed videos.`);
+    saveAllBtn.textContent = 'Save All Changes';
+    await fetchVideosByFolder(); // Refresh data after saving
+};
+
 const handleBulkUpdate = async () => {
     const bulkPrivacy = document.getElementById('bulk-privacy').value;
     const bulkTagsValue = document.getElementById('bulk-tags').value;
@@ -241,7 +280,7 @@ const handleManageFolder = () => {
 
 document.addEventListener('DOMContentLoaded', () => {
     folderFilter.addEventListener('change', fetchVideosByFolder);
-    saveAllBtn.addEventListener('click', handleSaveAll);
+    saveAllBtn.addEventListener('click', handleSaveAll); // This listener now correctly points to an existing function
     manageFolderBtn.addEventListener('click', handleManageFolder);
     applyBulkEditBtn.addEventListener('click', handleBulkUpdate);
     selectAllCheckbox.addEventListener('click', () => {
