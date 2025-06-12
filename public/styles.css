@@ -373,3 +373,34 @@ td[contenteditable="true"]:focus {
     content: ' \25BC'; /* Down arrow for descending */
     color: var(--accent-blue);
 }
+/* --- New Styles for Sortable Table Headers --- */
+
+.sortable-header {
+    cursor: pointer;
+    position: relative; /* Needed for positioning the arrow */
+    padding-right: 2em !important; /* Make space for the arrow */
+    user-select: none; /* Prevents text selection on click */
+}
+
+.sortable-header:hover {
+    background-color: #e9ecef; /* A light gray to indicate interactivity */
+}
+
+/* Add up/down arrows using pseudo-elements */
+.sortable-header::after {
+    content: ' \2195'; /* Unsorted up/down arrow */
+    position: absolute;
+    right: 0.75rem;
+    color: #adb5bd; /* Light gray for the unsorted indicator */
+    font-size: 1.1em;
+}
+
+.sortable-header.sorted-asc::after {
+    content: ' \25B2'; /* Up arrow for ascending */
+    color: var(--accent-blue); /* Blue for the active indicator */
+}
+
+.sortable-header.sorted-desc::after {
+    content: ' \25BC'; /* Down arrow for descending */
+    color: var(--accent-blue);
+}
