@@ -8,57 +8,86 @@ const bulkEditBar = document.getElementById('bulk-edit-bar');
 const selectionCounter = document.getElementById('selection-counter');
 const selectAllCheckbox = document.getElementById('select-all-checkbox');
 const applyBulkEditBtn = document.getElementById('apply-bulk-edit-btn');
+const tableHeader = document.querySelector('#video-table thead'); // NEW: Get the table header for clicks
 
 let currentUser = null;
 let originalVideoData = new Map();
 let selectedVideoIds = new Set(); 
+let currentVideos = []; // NEW: To hold the currently displayed video data for sorting
+let sortState = { column: null, direction: 'asc' }; // NEW: To track sorting state
 
-// --- NEW: Restored duration formatting function ---
-const formatDuration = (seconds) => {
-    if (isNaN(seconds) || seconds < 0) {
-        return '0:00';
+// --- NEW: SORTING FUNCTIONS ---
+const updateSortIcons = () => {
+    document.querySelectorAll('.sortable-header').forEach(header => {
+        header.classList.remove('sorted-asc', 'sorted-desc');
+        if (header.dataset.sortKey === sortState.column) {
+            header.classList.add(sortState.direction === 'asc' ? 'sorted-asc' : 'sorted-desc');
+        }
+    });
+};
+
+const sortVideos = (key) => {
+    if (sortState.column === key) {
+        sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortState.column = key;
+        sortState.direction = 'asc';
     }
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
 
-    const paddedSecs = String(secs).padStart(2, '0');
-    const paddedMins = String(minutes).padStart(2, '0');
+    currentVideos.sort((a, b) => {
+        let valA, valB;
+        if (key === 'privacy') {
+            valA = a.privacy.view;
+            valB = b.privacy.view;
+        } else {
+            valA = a[key];
+            valB = b[key];
+        }
+        
+        let comparison = 0;
+        if (typeof valA === 'number' && typeof valB === 'number') {
+            comparison = valA - valB; // Numerical sort for duration
+        } else {
+            valA = String(valA || '').toLowerCase();
+            valB = String(valB || '').toLowerCase();
+            comparison = valA.localeCompare(valB); // Alphabetical sort for strings
+        }
+        return sortState.direction === 'asc' ? comparison : -comparison;
+    });
 
-    if (hours > 0) {
-        return `${hours}:${paddedMins}:${paddedSecs}`;
-    }
-    return `${minutes}:${paddedSecs}`;
+    renderTable(currentVideos); // Re-render the table with sorted data
 };
 
 // --- RENDER TABLE (UPDATED) ---
 const renderTable = (videos) => {
     videoTbody.innerHTML = '';
-    originalVideoData.clear();
-    saveAllBtn.style.display = 'none';
-    manageFolderBtn.style.display = 'none';
-    if(bulkEditBar) bulkEditBar.style.display = 'none';
+    
+    // Check if this is a fresh render or a re-sort
+    const isNewData = videos !== currentVideos;
+    if (isNewData) {
+        originalVideoData.clear();
+        currentVideos = videos; // Update the global array with the new data
+    }
 
-    // **FIX**: The colspan should be 9 to match the header.
     if (videos.length === 0) {
         videoTbody.innerHTML = '<tr><td colspan="9">No videos found in this folder.</td></tr>';
+        saveAllBtn.style.display = 'none';
+        manageFolderBtn.style.display = 'none';
         return;
     }
 
     const privacyOptions = ['anybody', 'unlisted', 'password', 'nobody'];
     videos.forEach(video => {
         const videoId = video.uri.split('/').pop();
-        originalVideoData.set(videoId, {
-            name: video.name || '',
-            description: video.description || '',
-            tags: video.tags.map(tag => tag.name).join(', '),
-            privacy: video.privacy.view,
-        });
+        if (isNewData) {
+            originalVideoData.set(videoId, {
+                name: video.name || '', description: video.description || '',
+                tags: video.tags.map(tag => tag.name).join(', '), privacy: video.privacy.view,
+            });
+        }
         const row = document.createElement('tr');
         row.dataset.videoId = videoId;
         const privacyDropdown = `<select class="privacy-select">${privacyOptions.map(opt => `<option value="${opt}" ${video.privacy.view === opt ? 'selected' : ''}>${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`).join('')}</select>`;
-        
-        // **UPDATE**: Re-added the Duration <td> to the table row
         row.innerHTML = `
             <td><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
             <td class="video-title" contenteditable="true">${video.name || ''}</td>
@@ -79,8 +108,8 @@ const renderTable = (videos) => {
     manageFolderBtn.style.display = 'inline-block';
     selectedVideoIds.clear();
     updateBulkEditUI();
+    updateSortIcons(); // NEW: Update icons after rendering
 };
-
 
 // --- FETCH VIDEOS BY FOLDER (UPDATED) ---
 const fetchVideosByFolder = async () => {
@@ -88,9 +117,7 @@ const fetchVideosByFolder = async () => {
     if (!selectedFolderUri) {
         tableContainer.style.display = 'none'; videoTbody.innerHTML = ''; saveAllBtn.style.display = 'none'; manageFolderBtn.style.display = 'none'; if(bulkEditBar) bulkEditBar.style.display = 'none'; return;
     }
-
     tableContainer.style.display = 'block';
-    // **FIX**: The colspan should be 9.
     videoTbody.innerHTML = `<tr><td colspan="9">Fetching videos from folder...</td></tr>`;
     folderFilter.disabled = true; saveAllBtn.style.display = 'none'; manageFolderBtn.style.display = 'none'; if(bulkEditBar) bulkEditBar.style.display = 'none';
 
@@ -100,6 +127,7 @@ const fetchVideosByFolder = async () => {
         });
         if (!response.ok) throw new Error((await response.json()).error);
         const { data } = await response.json();
+        sortState = { column: null, direction: 'asc' }; // Reset sort state on new folder load
         renderTable(data);
     } catch (error) {
         videoTbody.innerHTML = `<tr><td colspan="9" style="color: red;">Error: ${error.message}</td></tr>`;
@@ -108,12 +136,20 @@ const fetchVideosByFolder = async () => {
     }
 };
 
-// --- All other functions are restored to their last working state ---
-
+// --- ALL OTHER FUNCTIONS AND LISTENERS ARE HERE, UNCHANGED ---
+const formatDuration = (seconds) => {
+    if (isNaN(seconds) || seconds < 0) return '0:00';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    const paddedSecs = String(secs).padStart(2, '0');
+    const paddedMins = String(minutes).padStart(2, '0');
+    if (hours > 0) return `${hours}:${paddedMins}:${paddedSecs}`;
+    return `${minutes}:${paddedSecs}`;
+};
 const parseTags = (tagString) => {
     return tagString.split(/[\s,]+/).map(tag => tag.trim()).filter(Boolean);
 };
-
 const handleSave = async (event, user) => {
     const saveButton = event.target;
     const row = saveButton.closest('tr');
@@ -144,7 +180,6 @@ const handleSave = async (event, user) => {
         saveButton.disabled = false;
     }
 };
-
 const fetchFolders = async (user) => {
     try {
         let allFolders = []; let nextPagePath = null;
@@ -173,7 +208,6 @@ const fetchFolders = async (user) => {
         folderFilter.innerHTML = `<option>Error loading folders</option>`; console.error(error);
     }
 };
-
 const updateBulkEditUI = () => {
     const selectedCount = selectedVideoIds.size;
     if (selectedCount > 0) {
@@ -184,7 +218,6 @@ const updateBulkEditUI = () => {
     const totalCheckboxes = document.querySelectorAll('.video-checkbox').length;
     selectAllCheckbox.checked = totalCheckboxes > 0 && selectedCount === totalCheckboxes;
 };
-
 const handleSelectionChange = (event) => {
     const checkbox = event.target;
     const videoId = checkbox.dataset.videoId;
@@ -195,7 +228,6 @@ const handleSelectionChange = (event) => {
     }
     updateBulkEditUI();
 };
-
 const handleSaveAll = async () => {
     const changedRowsData = [];
     const allRows = videoTbody.querySelectorAll('tr');
@@ -239,7 +271,6 @@ const handleSaveAll = async () => {
     saveAllBtn.textContent = 'Save All Changes';
     await fetchVideosByFolder();
 };
-
 const handleBulkUpdate = async () => {
     const bulkPrivacy = document.getElementById('bulk-privacy').value;
     const bulkTagsValue = document.getElementById('bulk-tags').value;
@@ -275,7 +306,6 @@ const handleBulkUpdate = async () => {
     applyBulkEditBtn.textContent = 'Apply to Selected';
     await fetchVideosByFolder();
 };
-
 const handleManageFolder = () => {
     const selectedOption = folderFilter.options[folderFilter.selectedIndex];
     const folderLink = selectedOption.dataset.link;
@@ -285,6 +315,14 @@ const handleManageFolder = () => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    // NEW: Add event listener for the whole table header
+    tableHeader.addEventListener('click', (event) => {
+        const header = event.target.closest('.sortable-header');
+        if (header) {
+            sortVideos(header.dataset.sortKey);
+        }
+    });
+
     folderFilter.addEventListener('change', fetchVideosByFolder);
     saveAllBtn.addEventListener('click', handleSaveAll);
     manageFolderBtn.addEventListener('click', handleManageFolder);
