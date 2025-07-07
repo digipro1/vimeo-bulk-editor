@@ -14,17 +14,13 @@ let originalVideoData = new Map();
 let selectedVideoIds = new Set(); 
 
 const formatDuration = (seconds) => {
-    if (isNaN(seconds) || seconds < 0) {
-        return '0:00';
-    }
+    if (isNaN(seconds) || seconds < 0) return '0:00';
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
     const paddedSecs = String(secs).padStart(2, '0');
     const paddedMins = String(minutes).padStart(2, '0');
-    if (hours > 0) {
-        return `${hours}:${paddedMins}:${paddedSecs}`;
-    }
+    if (hours > 0) return `${hours}:${paddedMins}:${paddedSecs}`;
     return `${minutes}:${paddedSecs}`;
 };
 
@@ -99,8 +95,12 @@ const fetchVideosByFolder = async () => {
     }
 };
 
-const parseTags = (tagString) => {
-    return tagString.split(/[\s,]+/).map(tag => tag.trim()).filter(Boolean);
+// **THE FIX IS HERE**: This function now creates the correct data structure.
+const parseTagsForAPI = (tagString) => {
+    return tagString.split(/[\s,]+/) // Split by spaces or commas
+        .map(tag => tag.trim())       // Remove extra whitespace
+        .filter(Boolean)              // Remove any empty tags
+        .map(tagName => ({ name: tagName })); // Convert each tag string into an object
 };
 
 const handleSave = async (event, user) => {
@@ -109,13 +109,17 @@ const handleSave = async (event, user) => {
     const videoId = row.dataset.videoId;
     saveButton.textContent = 'Saving...';
     saveButton.disabled = true;
-    const tagsArray = parseTags(row.querySelector('.video-tags').textContent);
+    
+    // Use the new helper function to get the correctly formatted array of objects
+    const tagsForAPI = parseTagsForAPI(row.querySelector('.video-tags').textContent);
+
     const updates = {
         name: row.querySelector('.video-title').textContent,
         description: row.querySelector('.video-description').textContent,
-        tags: tagsArray,
+        tags: tagsForAPI, // Send the array of objects
         privacy: { view: row.querySelector('.privacy-select').value }
     };
+
     try {
         const response = await fetch('/api/update-video', {
             method: 'PATCH',
@@ -124,7 +128,11 @@ const handleSave = async (event, user) => {
         });
         if (!response.ok) throw new Error((await response.json()).error);
         saveButton.textContent = 'Saved!';
-        originalVideoData.set(videoId, { ...updates, tags: updates.tags.join(', '), privacy: updates.privacy.view });
+        originalVideoData.set(videoId, { 
+            ...updates, 
+            tags: updates.tags.map(t => t.name).join(', '), // Convert back to string for storage
+            privacy: updates.privacy.view 
+        });
         setTimeout(() => { saveButton.textContent = 'Save'; }, 2000);
     } catch (error) {
         alert(`Error saving video: ${error.message}`);
@@ -192,15 +200,15 @@ const handleSaveAll = async () => {
         const videoId = row.dataset.videoId;
         if (!videoId) return;
         const original = originalVideoData.get(videoId);
-        const currentCleanTags = parseTags(row.querySelector('.video-tags').textContent);
+        const currentTagsForAPI = parseTagsForAPI(row.querySelector('.video-tags').textContent);
         const current = {
             name: row.querySelector('.video-title').textContent,
             description: row.querySelector('.video-description').textContent,
-            tags: currentCleanTags.join(', '),
+            tags: currentTagsForAPI.map(t => t.name).join(', '), // Compare as string
             privacy: row.querySelector('.privacy-select').value,
         };
         if (original.name !== current.name || original.description !== current.description || original.tags !== current.tags || original.privacy !== current.privacy) {
-            changedRowsData.push({ videoId, updates: { ...current, tags: currentCleanTags, privacy: { view: current.privacy } } });
+            changedRowsData.push({ videoId, updates: { ...current, tags: currentTagsForAPI, privacy: { view: current.privacy } } });
         }
     });
     if (changedRowsData.length === 0) {
@@ -209,8 +217,6 @@ const handleSaveAll = async () => {
     }
     saveAllBtn.textContent = 'Saving...';
     saveAllBtn.disabled = true;
-    manageFolderBtn.disabled = true;
-    folderFilter.disabled = true;
     let successCount = 0;
     for (let i = 0; i < changedRowsData.length; i++) {
         const { videoId, updates } = changedRowsData[i];
@@ -228,10 +234,6 @@ const handleSaveAll = async () => {
     }
     alert(`Saved ${successCount} of ${changedRowsData.length} changed videos.`);
     saveAllBtn.textContent = 'Save All Changes';
-    // **THE FIX IS HERE**: Re-enable all the buttons after the process completes.
-    saveAllBtn.disabled = false;
-    manageFolderBtn.disabled = false;
-    folderFilter.disabled = false;
     await fetchVideosByFolder();
 };
 
@@ -248,12 +250,11 @@ const handleBulkUpdate = async () => {
         bulkUpdates.privacy = { view: bulkPrivacy };
     }
     if (bulkTagsValue) {
-        bulkUpdates.tags = parseTags(bulkTagsValue);
+        // Use the new helper function here as well
+        bulkUpdates.tags = parseTagsForAPI(bulkTagsValue);
     }
     applyBulkEditBtn.textContent = 'Updating...';
     applyBulkEditBtn.disabled = true;
-    manageFolderBtn.disabled = true;
-    folderFilter.disabled = true;
     let count = 0;
     for (const videoId of selectedVideoIds) {
         count++;
@@ -270,10 +271,6 @@ const handleBulkUpdate = async () => {
     }
     alert('Bulk update complete!');
     applyBulkEditBtn.textContent = 'Apply to Selected';
-    // **THE FIX IS HERE**: Re-enable all the buttons after the process completes.
-    applyBulkEditBtn.disabled = false;
-    manageFolderBtn.disabled = false;
-    folderFilter.disabled = false;
     await fetchVideosByFolder();
 };
 
