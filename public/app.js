@@ -8,10 +8,71 @@ const bulkEditBar = document.getElementById('bulk-edit-bar');
 const selectionCounter = document.getElementById('selection-counter');
 const selectAllCheckbox = document.getElementById('select-all-checkbox');
 const applyBulkEditBtn = document.getElementById('apply-bulk-edit-btn');
+const downloadCaptionsBtn = document.getElementById('download-captions-btn');
+const tableHeader = document.querySelector('#video-table thead');
 
 let currentUser = null;
 let originalVideoData = new Map();
 let selectedVideoIds = new Set(); 
+let currentVideos = [];
+let sortState = { column: null, direction: 'asc' };
+
+// --- NEW: DOWNLOAD CAPTIONS LOGIC ---
+const handleDownloadCaptions = async () => {
+    if (selectedVideoIds.size === 0) {
+        alert('Please select videos to download captions from.');
+        return;
+    }
+
+    downloadCaptionsBtn.textContent = 'Preparing...';
+    downloadCaptionsBtn.disabled = true;
+
+    let downloadedCount = 0;
+    let videoIndex = 0;
+    for (const videoId of selectedVideoIds) {
+        videoIndex++;
+        downloadCaptionsBtn.textContent = `Downloading ${videoIndex}/${selectedVideoIds.size}...`;
+        try {
+            const tracksResponse = await fetch(`/api/get-captions?videoId=${videoId}`, {
+                headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
+            });
+
+            if (!tracksResponse.ok) {
+                console.error(`Could not fetch caption info for video ${videoId}`);
+                continue;
+            }
+
+            const tracks = await tracksResponse.json();
+            if (tracks.length > 0) {
+                const firstTrack = tracks[0];
+                const fileResponse = await fetch(firstTrack.link);
+                const vttText = await fileResponse.text();
+
+                const blob = new Blob([vttText], { type: 'text/vtt' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+
+                const videoData = originalVideoData.get(videoId);
+                const videoTitle = videoData ? videoData.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : videoId;
+                a.download = `${videoTitle}.${firstTrack.language}.vtt`;
+                a.href = url;
+                document.body.appendChild(a);
+                a.click();
+                
+                URL.revokeObjectURL(url);
+                a.remove();
+                downloadedCount++;
+            }
+        } catch (error) {
+            console.error(`Failed to download caption for video ${videoId}:`, error);
+        }
+    }
+
+    alert(`Downloaded ${downloadedCount} of ${selectedVideoIds.size} available caption files.`);
+    downloadCaptionsBtn.textContent = 'Download Captions';
+    downloadCaptionsBtn.disabled = false;
+};
 
 const formatDuration = (seconds) => {
     if (isNaN(seconds) || seconds < 0) return '0:00';
@@ -24,31 +85,69 @@ const formatDuration = (seconds) => {
     return `${minutes}:${paddedSecs}`;
 };
 
+const updateSortIcons = () => {
+    document.querySelectorAll('.sortable-header').forEach(header => {
+        header.classList.remove('sorted-asc', 'sorted-desc');
+        if (header.dataset.sortKey === sortState.column) {
+            header.classList.add(sortState.direction === 'asc' ? 'sorted-asc' : 'sorted-desc');
+        }
+    });
+};
+
+const sortVideos = (key) => {
+    if (sortState.column === key) {
+        sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortState.column = key;
+        sortState.direction = 'asc';
+    }
+    currentVideos.sort((a, b) => {
+        let valA, valB;
+        if (key === 'privacy') {
+            valA = a.privacy.view;
+            valB = b.privacy.view;
+        } else {
+            valA = a[key];
+            valB = b[key];
+        }
+        let comparison = 0;
+        if (typeof valA === 'number' && typeof valB === 'number') {
+            comparison = valA - valB;
+        } else {
+            valA = String(valA || '').toLowerCase();
+            valB = String(valB || '').toLowerCase();
+            comparison = valA.localeCompare(valB);
+        }
+        return sortState.direction === 'asc' ? comparison : -comparison;
+    });
+    renderTable(currentVideos);
+};
+
 const renderTable = (videos) => {
     videoTbody.innerHTML = '';
-    originalVideoData.clear();
-    saveAllBtn.style.display = 'none';
-    manageFolderBtn.style.display = 'none';
-    if(bulkEditBar) bulkEditBar.style.display = 'none';
-
+    const isNewData = videos !== currentVideos;
+    if (isNewData) {
+      originalVideoData.clear();
+      currentVideos = videos;
+    }
     if (videos.length === 0) {
         videoTbody.innerHTML = '<tr><td colspan="9">No videos found in this folder.</td></tr>';
+        saveAllBtn.style.display = 'none';
+        manageFolderBtn.style.display = 'none';
         return;
     }
-
     const privacyOptions = ['anybody', 'unlisted', 'password', 'nobody'];
     videos.forEach(video => {
         const videoId = video.uri.split('/').pop();
-        originalVideoData.set(videoId, {
-            name: video.name || '',
-            description: video.description || '',
-            tags: video.tags.map(tag => tag.name).join(', '),
-            privacy: video.privacy.view,
-        });
+        if (isNewData) {
+            originalVideoData.set(videoId, {
+                name: video.name || '', description: video.description || '',
+                tags: video.tags.map(tag => tag.name).join(', '), privacy: video.privacy.view,
+            });
+        }
         const row = document.createElement('tr');
         row.dataset.videoId = videoId;
         const privacyDropdown = `<select class="privacy-select">${privacyOptions.map(opt => `<option value="${opt}" ${video.privacy.view === opt ? 'selected' : ''}>${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`).join('')}</select>`;
-        
         row.innerHTML = `
             <td><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
             <td class="video-title" contenteditable="true">${video.name || ''}</td>
@@ -64,11 +163,11 @@ const renderTable = (videos) => {
         row.querySelector('.save-btn').addEventListener('click', (e) => handleSave(e, currentUser));
         row.querySelector('.video-checkbox').addEventListener('change', handleSelectionChange);
     });
-
     saveAllBtn.style.display = 'inline-block';
     manageFolderBtn.style.display = 'inline-block';
     selectedVideoIds.clear();
     updateBulkEditUI();
+    updateSortIcons();
 };
 
 const fetchVideosByFolder = async () => {
@@ -76,17 +175,16 @@ const fetchVideosByFolder = async () => {
     if (!selectedFolderUri) {
         tableContainer.style.display = 'none'; videoTbody.innerHTML = ''; saveAllBtn.style.display = 'none'; manageFolderBtn.style.display = 'none'; if(bulkEditBar) bulkEditBar.style.display = 'none'; return;
     }
-
     tableContainer.style.display = 'block';
     videoTbody.innerHTML = `<tr><td colspan="9">Fetching videos from folder...</td></tr>`;
     folderFilter.disabled = true; saveAllBtn.style.display = 'none'; manageFolderBtn.style.display = 'none'; if(bulkEditBar) bulkEditBar.style.display = 'none';
-
     try {
         const response = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(selectedFolderUri)}`, {
             headers: { Authorization: `Bearer ${currentUser.token.access_token}` },
         });
         if (!response.ok) throw new Error((await response.json()).error);
         const { data } = await response.json();
+        sortState = { column: null, direction: 'asc' };
         renderTable(data);
     } catch (error) {
         videoTbody.innerHTML = `<tr><td colspan="9" style="color: red;">Error: ${error.message}</td></tr>`;
@@ -95,12 +193,8 @@ const fetchVideosByFolder = async () => {
     }
 };
 
-// **THE FIX IS HERE**: This function now creates the correct data structure.
 const parseTagsForAPI = (tagString) => {
-    return tagString.split(/[\s,]+/) // Split by spaces or commas
-        .map(tag => tag.trim())       // Remove extra whitespace
-        .filter(Boolean)              // Remove any empty tags
-        .map(tagName => ({ name: tagName })); // Convert each tag string into an object
+    return tagString.split(/[\s,]+/).map(tag => tag.trim()).filter(Boolean).map(tagName => ({ name: tagName }));
 };
 
 const handleSave = async (event, user) => {
@@ -109,17 +203,13 @@ const handleSave = async (event, user) => {
     const videoId = row.dataset.videoId;
     saveButton.textContent = 'Saving...';
     saveButton.disabled = true;
-    
-    // Use the new helper function to get the correctly formatted array of objects
     const tagsForAPI = parseTagsForAPI(row.querySelector('.video-tags').textContent);
-
     const updates = {
         name: row.querySelector('.video-title').textContent,
         description: row.querySelector('.video-description').textContent,
-        tags: tagsForAPI, // Send the array of objects
+        tags: tagsForAPI,
         privacy: { view: row.querySelector('.privacy-select').value }
     };
-
     try {
         const response = await fetch('/api/update-video', {
             method: 'PATCH',
@@ -128,11 +218,7 @@ const handleSave = async (event, user) => {
         });
         if (!response.ok) throw new Error((await response.json()).error);
         saveButton.textContent = 'Saved!';
-        originalVideoData.set(videoId, { 
-            ...updates, 
-            tags: updates.tags.map(t => t.name).join(', '), // Convert back to string for storage
-            privacy: updates.privacy.view 
-        });
+        originalVideoData.set(videoId, { ...updates, tags: updates.tags.map(t => t.name).join(', '), privacy: updates.privacy.view });
         setTimeout(() => { saveButton.textContent = 'Save'; }, 2000);
     } catch (error) {
         alert(`Error saving video: ${error.message}`);
@@ -204,7 +290,7 @@ const handleSaveAll = async () => {
         const current = {
             name: row.querySelector('.video-title').textContent,
             description: row.querySelector('.video-description').textContent,
-            tags: currentTagsForAPI.map(t => t.name).join(', '), // Compare as string
+            tags: currentTagsForAPI.map(t=>t.name).join(', '),
             privacy: row.querySelector('.privacy-select').value,
         };
         if (original.name !== current.name || original.description !== current.description || original.tags !== current.tags || original.privacy !== current.privacy) {
@@ -250,7 +336,6 @@ const handleBulkUpdate = async () => {
         bulkUpdates.privacy = { view: bulkPrivacy };
     }
     if (bulkTagsValue) {
-        // Use the new helper function here as well
         bulkUpdates.tags = parseTagsForAPI(bulkTagsValue);
     }
     applyBulkEditBtn.textContent = 'Updating...';
@@ -283,6 +368,11 @@ const handleManageFolder = () => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    tableHeader.addEventListener('click', (event) => {
+        const header = event.target.closest('.sortable-header');
+        if (header) { sortVideos(header.dataset.sortKey); }
+    });
+    downloadCaptionsBtn.addEventListener('click', handleDownloadCaptions);
     folderFilter.addEventListener('change', fetchVideosByFolder);
     saveAllBtn.addEventListener('click', handleSaveAll);
     manageFolderBtn.addEventListener('click', handleManageFolder);
