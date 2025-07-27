@@ -10,11 +10,6 @@ const selectAllCheckbox = document.getElementById('select-all-checkbox');
 const applyBulkEditBtn = document.getElementById('apply-bulk-edit-btn');
 const downloadCaptionsBtn = document.getElementById('download-captions-btn');
 const tableHeader = document.querySelector('#video-table thead');
-// NEW: Modal elements
-const descriptionModal = document.getElementById('description-modal');
-const modalSaveBtn = document.getElementById('modal-save-btn');
-const modalCancelBtn = document.getElementById('modal-cancel-btn');
-const modalCloseBtn = document.getElementById('modal-close-btn');
 
 let currentUser = null;
 let originalVideoData = new Map();
@@ -23,7 +18,7 @@ let currentVideos = [];
 let sortState = { column: null, direction: 'asc' };
 let currentlyEditingVideoId = null;
 
-// --- NEW: MODAL AND EDITOR FUNCTIONS ---
+// --- RICH TEXT EDITOR MODAL LOGIC ---
 const openDescriptionEditor = (videoId) => {
     currentlyEditingVideoId = videoId;
     const row = videoTbody.querySelector(`tr[data-video-id="${videoId}"]`);
@@ -65,7 +60,8 @@ const saveDescriptionFromModal = () => {
     closeDescriptionEditor();
 };
 
-// --- RENDER TABLE (UPDATED) ---
+
+// --- RENDER TABLE ---
 const renderTable = (videos) => {
     videoTbody.innerHTML = '';
     const isNewData = videos !== currentVideos;
@@ -84,16 +80,13 @@ const renderTable = (videos) => {
         const videoId = video.uri.split('/').pop();
         if (isNewData) {
             originalVideoData.set(videoId, {
-                name: video.name || '',
-                description: video.description || '', // Store raw HTML
-                tags: video.tags.map(tag => tag.name).join(', '), 
-                privacy: video.privacy.view,
+                name: video.name || '', description: video.description || '',
+                tags: video.tags.map(tag => tag.name).join(', '), privacy: video.privacy.view,
             });
         }
         const row = document.createElement('tr');
         row.dataset.videoId = videoId;
         const privacyDropdown = `<select class="privacy-select">${privacyOptions.map(opt => `<option value="${opt}" ${video.privacy.view === opt ? 'selected' : ''}>${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`).join('')}</select>`;
-        
         row.innerHTML = `
             <td><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
             <td class="video-title" contenteditable="true">${video.name || ''}</td>
@@ -116,26 +109,25 @@ const renderTable = (videos) => {
     updateSortIcons();
 };
 
-// --- SAVE FUNCTIONS (UPDATED) ---
-// Now reads description from innerHTML to preserve formatting
+// --- GET UPDATES FROM A ROW (HELPER) ---
 const getUpdatesFromRow = (row) => {
     const videoId = row.dataset.videoId;
     return {
         videoId: videoId,
         updates: {
             name: row.querySelector('.video-title').textContent,
-            description: row.querySelector('.description-cell').innerHTML, // Use innerHTML
+            description: row.querySelector('.description-cell').innerHTML,
             tags: parseTagsForAPI(row.querySelector('.video-tags').textContent),
             privacy: { view: row.querySelector('.privacy-select').value }
         }
     };
 };
 
+// --- ALL OTHER FUNCTIONS ---
 const handleSave = async (event, user) => {
     const saveButton = event.target;
     const row = saveButton.closest('tr');
     const { videoId, updates } = getUpdatesFromRow(row);
-    
     saveButton.textContent = 'Saving...';
     saveButton.disabled = true;
     try {
@@ -156,95 +148,67 @@ const handleSave = async (event, user) => {
     }
 };
 
-const handleSaveAll = async () => {
-    const changedRowsData = [];
-    const allRows = videoTbody.querySelectorAll('tr');
-    allRows.forEach(row => {
-        const videoId = row.dataset.videoId;
-        if (!videoId) return;
-
-        const original = originalVideoData.get(videoId);
-        const { updates: currentUpdates } = getUpdatesFromRow(row);
-        const current = {
-            ...currentUpdates,
-            tags: currentUpdates.tags.map(t=>t.name).join(', '),
-            privacy: currentUpdates.privacy.view,
-        };
-        
-        if (original.name !== current.name || original.description !== current.description || original.tags !== current.tags || original.privacy !== current.privacy) {
-            changedRowsData.push({ videoId, updates: currentUpdates });
-        }
-    });
-    if (changedRowsData.length === 0) {
-        alert('No changes to save.');
+// **THIS IS THE MISSING FUNCTION THAT IS BEING RESTORED**
+const handleDownloadCaptions = async () => {
+    if (selectedVideoIds.size === 0) {
+        alert('Please select videos to download captions from.');
         return;
     }
-    saveAllBtn.textContent = 'Saving...';
-    saveAllBtn.disabled = true;
-    let successCount = 0;
-    for (let i = 0; i < changedRowsData.length; i++) {
-        const { videoId, updates } = changedRowsData[i];
-        saveAllBtn.textContent = `Saving ${i + 1} of ${changedRowsData.length}...`;
+    downloadCaptionsBtn.textContent = 'Preparing...';
+    downloadCaptionsBtn.disabled = true;
+    let downloadedCount = 0;
+    let videoIndex = 0;
+    for (const videoId of selectedVideoIds) {
+        videoIndex++;
+        downloadCaptionsBtn.textContent = `Downloading ${videoIndex}/${selectedVideoIds.size}...`;
         try {
-            const response = await fetch('/api/update-video', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.token.access_token}` },
-                body: JSON.stringify({ videoId, updates }),
+            const tracksResponse = await fetch(`/api/get-captions?videoId=${videoId}`, {
+                headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
             });
-            if (response.ok) successCount++;
+            if (!tracksResponse.ok) {
+                console.error(`Could not fetch caption info for video ${videoId}`);
+                continue;
+            }
+            const tracks = await tracksResponse.json();
+            if (tracks.length > 0) {
+                const firstTrack = tracks[0];
+                const fileResponse = await fetch(firstTrack.link);
+                const vttText = await fileResponse.text();
+                const blob = new Blob([vttText], { type: 'text/vtt' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                const videoData = originalVideoData.get(videoId);
+                const videoTitle = videoData ? videoData.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : videoId;
+                a.download = `${videoTitle}.${firstTrack.language}.vtt`;
+                a.href = url;
+                document.body.appendChild(a);
+                a.click();
+                URL.revokeObjectURL(url);
+                a.remove();
+                downloadedCount++;
+            }
         } catch (error) {
-            console.error(`Failed to save video ${videoId}:`, error);
+            console.error(`Failed to download caption for video ${videoId}:`, error);
         }
     }
-    alert(`Saved ${successCount} of ${changedRowsData.length} changed videos.`);
-    saveAllBtn.textContent = 'Save All Changes';
-    await fetchVideosByFolder();
+    alert(`Downloaded ${downloadedCount} of ${selectedVideoIds.size} available caption files.`);
+    downloadCaptionsBtn.textContent = 'Download Captions';
+    downloadCaptionsBtn.disabled = false;
 };
 
-// --- All other functions are unchanged, just pasted for completeness ---
-const fetchVideosByFolder = async () => { /* ... see previous steps ... */ };
-const parseTagsForAPI = (tagString) => { /* ... see previous steps ... */ };
-const fetchFolders = async (user) => { /* ... see previous steps ... */ };
-const updateBulkEditUI = () => { /* ... see previous steps ... */ };
-const handleSelectionChange = (event) => { /* ... see previous steps ... */ };
-const handleBulkUpdate = async () => { /* ... see previous steps ... */ };
-const handleManageFolder = () => { /* ... see previous steps ... */ };
-const updateSortIcons = () => { /* ... see previous steps ... */ };
-const sortVideos = (key) => { /* ... see previous steps ... */ };
-const formatDuration = (seconds) => { /* ... see previous steps ... */ };
+// --- PASTE IN THE REST OF THE FUNCTIONS (UNCHANGED) ---
+const formatDuration = (seconds) => { /* ... */ };
+const updateSortIcons = () => { /* ... */ };
+const sortVideos = (key) => { /* ... */ };
+const fetchVideosByFolder = async () => { /* ... */ };
+const parseTagsForAPI = (tagString) => { /* ... */ };
+const fetchFolders = async (user) => { /* ... */ };
+const updateBulkEditUI = () => { /* ... */ };
+const handleSelectionChange = (event) => { /* ... */ };
+const handleSaveAll = async () => { /* ... */ };
+const handleBulkUpdate = async () => { /* ... */ };
+const handleManageFolder = () => { /* ... */ };
 
 // --- PAGE AND AUTHENTICATION SETUP ---
-document.addEventListener('DOMContentLoaded', () => {
-    // Event listeners for page controls
-    tableHeader.addEventListener('click', (event) => {
-        const header = event.target.closest('.sortable-header');
-        if (header) { sortVideos(header.dataset.sortKey); }
-    });
-    downloadCaptionsBtn.addEventListener('click', handleDownloadCaptions);
-    folderFilter.addEventListener('change', fetchVideosByFolder);
-    saveAllBtn.addEventListener('click', handleSaveAll);
-    manageFolderBtn.addEventListener('click', handleManageFolder);
-    applyBulkEditBtn.addEventListener('click', handleBulkUpdate);
-    selectAllCheckbox.addEventListener('click', () => { /* ... see previous steps ... */ });
-
-    // NEW: Event listeners for the modal
-    modalSaveBtn.addEventListener('click', saveDescriptionFromModal);
-    modalCancelBtn.addEventListener('click', closeDescriptionEditor);
-    modalCloseBtn.addEventListener('click', closeDescriptionEditor);
-    descriptionModal.addEventListener('click', (event) => {
-        if (event.target === descriptionModal) { closeDescriptionEditor(); }
-    });
-    videoTbody.addEventListener('click', (event) => {
-        const descriptionCell = event.target.closest('.description-cell');
-        if (descriptionCell) {
-            const videoId = descriptionCell.closest('tr').dataset.videoId;
-            openDescriptionEditor(videoId);
-        }
-    });
-
-    // Netlify Identity auth flow
-    netlifyIdentity.on('login', (user) => { /* ... see previous steps ... */ });
-    netlifyIdentity.on('logout', () => { /* ... see previous steps ... */ });
-    const user = netlifyIdentity.currentUser();
-    if (user) { /* ... see previous steps ... */ }
-});
+document.addEventListener('DOMContentLoaded', () => { /* ... */ });
