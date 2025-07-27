@@ -8,7 +8,7 @@ const bulkEditBar = document.getElementById('bulk-edit-bar');
 const selectionCounter = document.getElementById('selection-counter');
 const selectAllCheckbox = document.getElementById('select-all-checkbox');
 const applyBulkEditBtn = document.getElementById('apply-bulk-edit-btn');
-const downloadCaptionsBtn = document.getElementById('download-captions-btn');
+const downloadCaptionsBtn = document.getElementById('download-captions-btn'); // NEW: Download button
 const tableHeader = document.querySelector('#video-table thead');
 
 let currentUser = null;
