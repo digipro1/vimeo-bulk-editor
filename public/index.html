@@ -15,11 +15,22 @@
 
     <main id="app-container" style="display: none;">
         <div id="controls-container">
-            <div id="folder-selection">
-                <label for="folder-filter">Select a Folder:</label>
-                <select id="folder-filter" disabled><option>Loading folders...</option></select>
+            <div class="controls-left">
+                <div id="folder-selection">
+                    <label for="folder-filter">Select a Folder:</label>
+                    <select id="folder-filter" disabled><option>Loading folders...</option></select>
+                </div>
+                <input type="text" id="search-input" placeholder="Search videos..." disabled>
             </div>
-            <button id="save-all-btn" style="display: none;">Save All Changes</button>
+            
+            <div class="controls-right">
+                <div class="column-toggle-wrapper">
+                    <button id="toggle-columns-btn" class="btn-secondary" disabled>Columns ⚙️</button>
+                    <div id="column-toggle-panel" class="dropdown-panel" style="display:none;">
+                        </div>
+                </div>
+                <button id="save-all-btn" style="display: none;">Save All Changes</button>
+            </div>
         </div>
 
         <div id="bulk-edit-bar" style="display: none;">
@@ -56,22 +67,22 @@
             <table id="video-table">
                 <thead>
                     <tr>
-                        <th><input type="checkbox" id="select-all-checkbox"></th>
-                        <th>Summary (Click to Edit)</th>
-                        <th>Title</th>
-                        <th>Series</th>
-                        <th>Date</th>
-                        <th>Minister</th>
-                        <th>Scripture</th>
-                        <th>Supporting Scripture</th>
-                        <th>Event Type</th>
-                        <th>Topic</th>
-                        <th>Features</th>
-                        <th>Holiday</th>
-                        <th>Location</th>
-                        <th>Audience</th>
-                        <th>Manage</th>
-                        <th>Action</th>
+                        <th class="col-Checkbox"><input type="checkbox" id="select-all-checkbox"></th>
+                        <th class="col-Summary">Summary (Click to Edit)</th>
+                        <th class="col-Title">Title</th>
+                        <th class="col-Series">Series</th>
+                        <th class="col-Date">Date</th>
+                        <th class="col-Minister">Minister</th>
+                        <th class="col-Scripture">Scripture</th>
+                        <th class="col-SupportingScripture">Supporting Scripture</th>
+                        <th class="col-EventType">Event Type</th>
+                        <th class="col-Topic">Topic</th>
+                        <th class="col-Features">Features</th>
+                        <th class="col-Holiday">Holiday</th>
+                        <th class="col-Location">Location</th>
+                        <th class="col-Audience">Audience</th>
+                        <th class="col-Manage">Manage</th>
+                        <th class="col-Action">Action</th>
                     </tr>
                 </thead>
                 <tbody id="video-list"></tbody>
