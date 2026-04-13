@@ -13,81 +13,59 @@ const selectAllCheckbox = document.getElementById('select-all-checkbox');
 const applyBulkEditBtn = document.getElementById('apply-bulk-edit-btn');
 const downloadCaptionsBtn = document.getElementById('download-captions-btn');
 const descriptionModal = document.getElementById('description-modal');
-const modalSaveBtn = document.getElementById('modal-save-btn');
-const modalCancelBtn = document.getElementById('modal-cancel-btn');
-const modalCloseBtn = document.getElementById('modal-close-btn');
 
 let currentUser = null;
 let originalVideoData = new Map();
 let selectedVideoIds = new Set(); 
 let currentlyEditingVideoId = null;
 
+// The core categories
 const GOVERNANCE_KEYS = [
     'Title', 'Series', 'Date', 'Minister', 'Scripture', 
     'Supporting Scripture', 'Event Type', 'Topic', 
     'Features', 'Holiday', 'Location', 'Audience'
 ];
 
-// --- COLUMN TOGGLE SETUP ---
-const initColumnToggles = () => {
-    const columnsToToggle = ['Summary', ...GOVERNANCE_KEYS];
-    columnTogglePanel.innerHTML = '';
-    
-    columnsToToggle.forEach(col => {
-        const cleanCol = col.replace(/\s+/g, '');
-        const label = document.createElement('label');
-        label.innerHTML = `<input type="checkbox" checked data-col="${cleanCol}"> ${col}`;
-        columnTogglePanel.appendChild(label);
-    });
+// Identify which ones are arrays (comma separated)
+const MULTI_VALUE_KEYS = ['Features', 'Holiday', 'Topic', 'Supporting Scripture'];
 
-    columnTogglePanel.addEventListener('change', (e) => {
-        if(e.target.tagName === 'INPUT') {
-            const colName = e.target.dataset.col;
-            if(e.target.checked) {
-                videoTable.classList.remove(`hide-col-${colName}`);
-            } else {
-                videoTable.classList.add(`hide-col-${colName}`);
-            }
-        }
-    });
+// The active filters chosen by the user
+const activeFilters = {}; 
+let currentFilterPanelKey = null;
 
-    toggleColumnsBtn.addEventListener('click', () => {
-        const isHidden = columnTogglePanel.style.display === 'none';
-        columnTogglePanel.style.display = isHidden ? 'flex' : 'none';
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!columnTogglePanel.contains(e.target) && e.target !== toggleColumnsBtn) {
-            columnTogglePanel.style.display = 'none';
-        }
-    });
+// --- DATA EXTRACTION (Phase 1) ---
+// Gets just the book from a scripture (e.g., "1 John 4:8" -> "1 John")
+const getBookName = (scriptureStr) => {
+    if (!scriptureStr) return '';
+    const match = scriptureStr.match(/^(\d\s+)?[a-zA-Z\s]+/);
+    return match ? match[0].trim() : scriptureStr.trim();
 };
 
-// --- LIVE SEARCH ---
-searchInput.addEventListener('input', (e) => {
-    const term = e.target.value.toLowerCase();
-    const rows = videoTbody.querySelectorAll('tr');
-    rows.forEach(row => {
-        const text = row.innerText.toLowerCase();
-        row.style.display = text.includes(term) ? '' : 'none';
-    });
-});
+// Universal extractor: returns an Array of values for a given key, properly cleaned
+const extractValues = (key, rawValue) => {
+    if (!rawValue) return [];
+    if (MULTI_VALUE_KEYS.includes(key)) {
+        return rawValue.split(',').map(s => {
+            let v = s.trim();
+            if (key === 'Supporting Scripture') v = getBookName(v);
+            return v;
+        }).filter(Boolean);
+    } else {
+        let v = rawValue.trim();
+        if (key === 'Scripture') v = getBookName(v);
+        return [v].filter(Boolean);
+    }
+};
 
-// --- METADATA PARSING & ASSEMBLY ---
 const parseVimeoDescription = (fullText) => {
     if (!fullText) return { summary: '', metadata: {} };
     const parts = fullText.split('---');
     const summary = parts[0].trim();
     const metadata = {};
-    
     if (parts[1]) {
-        const lines = parts[1].split('\n');
-        lines.forEach(line => {
+        parts[1].split('\n').forEach(line => {
             const [key, ...val] = line.split(':');
-            if (key && val.length > 0) {
-                const trimmedKey = key.trim();
-                metadata[trimmedKey] = val.join(':').trim();
-            }
+            if (key && val.length > 0) metadata[key.trim()] = val.join(':').trim();
         });
     }
     return { summary, metadata };
@@ -96,71 +74,170 @@ const parseVimeoDescription = (fullText) => {
 const assembleVimeoDescription = (summary, metadata) => {
     let newDesc = summary + '\n---\n';
     GOVERNANCE_KEYS.forEach(key => {
-        if (metadata[key]) {
-            newDesc += `${key}: ${metadata[key]}\n`;
-        }
+        if (metadata[key]) newDesc += `${key}: ${metadata[key]}\n`;
     });
     return newDesc.trim();
 };
 
-// --- API FETCHING ---
+// --- FILTER EXECUTION (Phase 3) ---
+const applyTableFilters = () => {
+    const term = searchInput.value.toLowerCase();
+    const rows = videoTbody.querySelectorAll('tr');
+
+    rows.forEach(row => {
+        const videoId = row.dataset.videoId;
+        const meta = originalVideoData.get(videoId).metadata;
+
+        // 1. Text Search Check
+        let passes = row.innerText.toLowerCase().includes(term);
+
+        // 2. Checkbox Logic (AND between categories, OR within)
+        if (passes) {
+            for (const key of GOVERNANCE_KEYS) {
+                const sel = activeFilters[key];
+                if (!sel || sel.length === 0) continue; // Condition A: No filter set
+
+                // Condition B: Extract video values and check against selections using .some()
+                const videoValues = extractValues(key, meta[key]);
+                if (!videoValues.some(item => sel.includes(item))) {
+                    passes = false; 
+                    break; 
+                }
+            }
+        }
+        row.style.display = passes ? '' : 'none';
+    });
+    updateSelectAllUI();
+};
+
+// --- FILTER POPULATION (Phase 2) ---
+const openFilterPanel = (key, btnElement) => {
+    currentFilterPanelKey = key;
+    const panel = document.getElementById('table-filter-panel');
+    const optionsContainer = document.getElementById('filter-panel-options');
+    
+    document.getElementById('filter-panel-title').innerText = `Filter ${key}`;
+    optionsContainer.innerHTML = '';
+
+    // Loop data to build Unique Set
+    const uniqueValues = new Set();
+    originalVideoData.forEach(video => {
+        const values = extractValues(key, video.metadata[key]);
+        values.forEach(v => uniqueValues.add(v));
+    });
+
+    const sortedValues = Array.from(uniqueValues).sort();
+    const selectedValues = activeFilters[key] || [];
+
+    if (sortedValues.length === 0) {
+        optionsContainer.innerHTML = '<i>No data found</i>';
+    } else {
+        sortedValues.forEach(val => {
+            const lbl = document.createElement('label');
+            const chk = document.createElement('input');
+            chk.type = 'checkbox';
+            chk.value = val;
+            chk.checked = selectedValues.includes(val);
+            lbl.appendChild(chk);
+            lbl.appendChild(document.createTextNode(val));
+            optionsContainer.appendChild(lbl);
+        });
+    }
+
+    // Position panel under the button
+    const rect = btnElement.getBoundingClientRect();
+    panel.style.left = `${rect.left + window.scrollX}px`;
+    panel.style.top = `${rect.bottom + window.scrollY + 5}px`;
+    panel.style.display = 'flex';
+};
+
+// Panel Apply Button
+document.getElementById('filter-panel-apply').addEventListener('click', () => {
+    const checked = document.querySelectorAll('#filter-panel-options input:checked');
+    const selected = Array.from(checked).map(c => c.value);
+    const btn = document.querySelector(`.filter-btn[data-key="${currentFilterPanelKey}"]`);
+
+    if (selected.length > 0) {
+        activeFilters[currentFilterPanelKey] = selected;
+        btn.classList.add('active');
+    } else {
+        delete activeFilters[currentFilterPanelKey];
+        btn.classList.remove('active');
+    }
+    document.getElementById('table-filter-panel').style.display = 'none';
+    applyTableFilters();
+});
+
+// Panel Clear Button
+document.getElementById('filter-panel-clear').addEventListener('click', () => {
+    delete activeFilters[currentFilterPanelKey];
+    document.querySelector(`.filter-btn[data-key="${currentFilterPanelKey}"]`).classList.remove('active');
+    document.getElementById('table-filter-panel').style.display = 'none';
+    applyTableFilters();
+});
+
+// --- COLUMN VISIBILITY ---
+const initColumnToggles = () => {
+    const cols = ['Summary', ...GOVERNANCE_KEYS];
+    columnTogglePanel.innerHTML = '';
+    cols.forEach(col => {
+        const lbl = document.createElement('label');
+        lbl.innerHTML = `<input type="checkbox" checked data-col="${col.replace(/\s+/g, '')}"> ${col}`;
+        columnTogglePanel.appendChild(lbl);
+    });
+
+    columnTogglePanel.addEventListener('change', (e) => {
+        if(e.target.tagName === 'INPUT') {
+            const cls = `hide-col-${e.target.dataset.col}`;
+            e.target.checked ? videoTable.classList.remove(cls) : videoTable.classList.add(cls);
+        }
+    });
+
+    toggleColumnsBtn.addEventListener('click', () => {
+        columnTogglePanel.style.display = columnTogglePanel.style.display === 'none' ? 'flex' : 'none';
+    });
+};
+
+// --- API & RENDERING ---
 const fetchFolders = async (user) => {
     try {
-        let allFolders = [];
-        let nextPagePath = null;
+        let allFolders = []; let nextPagePath = null;
         do {
-            const fetchUrl = nextPagePath ? `/api/get-folders?page=${encodeURIComponent(nextPagePath)}` : '/api/get-folders';
-            const response = await fetch(fetchUrl, { headers: { Authorization: `Bearer ${user.token.access_token}` } });
-            const pageData = await response.json();
-            allFolders = allFolders.concat(pageData.folders);
-            nextPagePath = pageData.nextPagePath;
+            const res = await fetch(nextPagePath ? `/api/get-folders?page=${encodeURIComponent(nextPagePath)}` : '/api/get-folders', 
+                { headers: { Authorization: `Bearer ${user.token.access_token}` } });
+            const data = await res.json();
+            allFolders = allFolders.concat(data.folders);
+            nextPagePath = data.nextPagePath;
         } while (nextPagePath);
 
         folderFilter.innerHTML = '<option value="" disabled selected>Select a folder...</option>';
-        allFolders.sort((a, b) => a.name.localeCompare(b.name)).forEach(folder => {
-            const option = document.createElement('option');
-            option.value = folder.uri;
-            option.textContent = folder.name;
-            folderFilter.appendChild(option);
+        allFolders.sort((a, b) => a.name.localeCompare(b.name)).forEach(f => {
+            folderFilter.innerHTML += `<option value="${f.uri}">${f.name}</option>`;
         });
-        folderFilter.disabled = false;
-    } catch (error) {
-        console.error('Error fetching folders:', error);
-    }
+    } catch (e) { console.error(e); }
 };
 
 const fetchVideosByFolder = async () => {
-    const uri = folderFilter.value;
-    if (!uri) return;
-
+    if (!folderFilter.value) return;
     tableContainer.style.display = 'block';
     videoTbody.innerHTML = '<tr><td colspan="16">Loading videos...</td></tr>';
     
     try {
-        const res = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(uri)}`, {
+        const res = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(folderFilter.value)}`, {
             headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
         });
-        
-        if (!res.ok) throw new Error('Failed to fetch videos from Vimeo API');
-        
         const { data } = await res.json();
-        
-        if (data && data.length > 0) {
-            renderTable(data);
-        } else {
-            videoTbody.innerHTML = '<tr><td colspan="16">No videos found in this folder.</td></tr>';
-            saveAllBtn.style.display = 'none';
-        }
+        renderTable(data);
     } catch (error) {
-        console.error(error);
-        videoTbody.innerHTML = '<tr><td colspan="16" style="color:red;">Error loading videos. Check the developer console.</td></tr>';
+        videoTbody.innerHTML = '<tr><td colspan="16" style="color:red;">Error loading videos.</td></tr>';
     }
 };
 
-// --- TABLE RENDERING ---
 const renderTable = (videos) => {
-    videoTbody.innerHTML = '';
-    originalVideoData.clear();
+    videoTbody.innerHTML = ''; originalVideoData.clear();
+    // Clear old filters
+    for (let key in activeFilters) delete activeFilters[key];
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
 
     videos.forEach(video => {
         const videoId = video.uri.split('/').pop();
@@ -169,195 +246,114 @@ const renderTable = (videos) => {
 
         const row = document.createElement('tr');
         row.dataset.videoId = videoId;
-        
         row.innerHTML = `
             <td class="col-Checkbox"><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
-            <td class="col-Summary summary-cell" style="cursor:pointer; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${summary || '(Edit Summary)'}</td>
-            <td contenteditable="true" class="col-Title meta-Title">${metadata['Title'] || ''}</td>
-            <td contenteditable="true" class="col-Series meta-Series">${metadata['Series'] || ''}</td>
-            <td contenteditable="true" class="col-Date meta-Date">${metadata['Date'] || ''}</td>
-            <td contenteditable="true" class="col-Minister meta-Minister">${metadata['Minister'] || ''}</td>
-            <td contenteditable="true" class="col-Scripture meta-Scripture">${metadata['Scripture'] || ''}</td>
-            <td contenteditable="true" class="col-SupportingScripture meta-SupportingScripture">${metadata['Supporting Scripture'] || ''}</td>
-            <td contenteditable="true" class="col-EventType meta-EventType">${metadata['Event Type'] || ''}</td>
-            <td contenteditable="true" class="col-Topic meta-Topic">${metadata['Topic'] || ''}</td>
-            <td contenteditable="true" class="col-Features meta-Features">${metadata['Features'] || ''}</td>
-            <td contenteditable="true" class="col-Holiday meta-Holiday">${metadata['Holiday'] || ''}</td>
-            <td contenteditable="true" class="col-Location meta-Location">${metadata['Location'] || ''}</td>
-            <td contenteditable="true" class="col-Audience meta-Audience">${metadata['Audience'] || ''}</td>
+            <td class="col-Summary summary-cell" style="cursor:pointer; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${summary || '(Edit)'}</td>
+            ${GOVERNANCE_KEYS.map(k => `<td contenteditable="true" class="col-${k.replace(/\s+/g, '')} meta-${k.replace(/\s+/g, '')}">${metadata[k] || ''}</td>`).join('')}
             <td class="col-Manage"><a href="https://vimeo.com/manage/videos/${videoId}" target="_blank" class="manage-link">Manage</a></td>
             <td class="col-Action"><button class="save-btn">Save</button></td>
         `;
         videoTbody.appendChild(row);
     });
-    
     saveAllBtn.style.display = 'inline-block';
+    applyTableFilters(); // Run filter once on load to establish state
 };
 
-// --- SAVE LOGIC ---
+// --- BULK & SAVE LOGIC ---
+const updateSelectAllUI = () => {
+    const visible = Array.from(document.querySelectorAll('.video-checkbox')).filter(c => c.closest('tr').style.display !== 'none');
+    selectAllCheckbox.checked = visible.length > 0 && visible.every(c => c.checked);
+};
+
 const handleSave = async (row) => {
     const videoId = row.dataset.videoId;
     const saveBtn = row.querySelector('.save-btn');
     saveBtn.innerText = 'Saving...';
-
+    
     const summary = row.querySelector('.summary-cell').innerHTML;
     const metadata = {};
-    GOVERNANCE_KEYS.forEach(key => {
-        const cleanKey = key.replace(/\s+/g, '');
-        const cell = row.querySelector(`.meta-${cleanKey}`);
-        if (cell) metadata[key] = cell.innerText.trim();
+    GOVERNANCE_KEYS.forEach(k => {
+        const cell = row.querySelector(`.meta-${k.replace(/\s+/g, '')}`);
+        if (cell) metadata[k] = cell.innerText.trim();
     });
 
-    const finalDescription = assembleVimeoDescription(summary, metadata);
-    
     try {
-        const response = await fetch('/api/update-video', {
+        const res = await fetch('/api/update-video', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.token.access_token}` },
-            body: JSON.stringify({ videoId, updates: { description: finalDescription } }),
+            body: JSON.stringify({ videoId, updates: { description: assembleVimeoDescription(summary, metadata) } }),
         });
-        if (response.ok) {
-            saveBtn.innerText = 'Saved!';
-            setTimeout(() => saveBtn.innerText = 'Save', 2000);
-        }
-    } catch (err) {
-        saveBtn.innerText = 'Error';
-    }
+        if (res.ok) { saveBtn.innerText = 'Saved!'; setTimeout(() => saveBtn.innerText = 'Save', 2000); }
+    } catch (err) { saveBtn.innerText = 'Error'; }
 };
 
 const handleSaveAll = async () => {
-    const allRows = Array.from(videoTbody.querySelectorAll('tr')).filter(row => row.style.display !== 'none');
-    saveAllBtn.innerText = 'Saving All...';
-    saveAllBtn.disabled = true;
-    
-    for (const row of allRows) {
-        await handleSave(row);
-    }
-    
-    saveAllBtn.innerText = 'Save All Changes';
-    saveAllBtn.disabled = false;
+    const visibleRows = Array.from(videoTbody.querySelectorAll('tr')).filter(r => r.style.display !== 'none');
+    saveAllBtn.innerText = 'Saving All...'; saveAllBtn.disabled = true;
+    for (const row of visibleRows) await handleSave(row);
+    saveAllBtn.innerText = 'Save All Changes'; saveAllBtn.disabled = false;
 };
 
-// --- BULK ACTIONS ---
-const handleBulkUpdate = () => {
-    const bulkVals = {
-        'Event Type': document.getElementById('bulk-event-type').value,
-        'Minister': document.getElementById('bulk-minister').value.trim(),
-        'Location': document.getElementById('bulk-location').value.trim(),
-        'Audience': document.getElementById('bulk-audience').value
-    };
-
-    selectedVideoIds.forEach(id => {
-        const row = document.querySelector(`tr[data-video-id="${id}"]`);
-        if (!row) return;
-        Object.keys(bulkVals).forEach(key => {
-            if (bulkVals[key]) {
-                const cleanKey = key.replace(/\s+/g, '');
-                const cell = row.querySelector(`.meta-${cleanKey}`);
-                if (cell) cell.innerText = bulkVals[key];
-            }
-        });
-    });
-    alert('Local metadata updated for selected videos. Don\'t forget to click Save All Changes!');
-};
-
-const handleDownloadCaptions = async () => { 
-    if (selectedVideoIds.size === 0) return alert('Select videos first');
-    downloadCaptionsBtn.disabled = true;
-    for (const id of selectedVideoIds) {
-        try {
-            const res = await fetch(`/api/get-captions?videoId=${id}`, {
-                headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
-            });
-            const tracks = await res.json();
-            if (tracks.length > 0) {
-                const fileRes = await fetch(tracks[0].link);
-                const text = await fileRes.text();
-                const blob = new Blob([text], { type: 'text/vtt' });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `captions_${id}.vtt`;
-                a.click();
-            }
-        } catch (e) { console.error(e); }
-    }
-    downloadCaptionsBtn.disabled = false;
-};
-
-// --- AUTH & EVENT LISTENERS ---
-const startApp = (user) => {
-    currentUser = user;
-    appContainer.style.display = 'block';
-    initColumnToggles();
-    fetchFolders(user);
-};
-
+// --- EVENT LISTENERS ---
 document.addEventListener('DOMContentLoaded', () => {
+    searchInput.addEventListener('input', applyTableFilters);
     folderFilter.addEventListener('change', fetchVideosByFolder);
-    applyBulkEditBtn.addEventListener('click', handleBulkUpdate);
-    saveAllBtn.addEventListener('click', handleSaveAll);
-    downloadCaptionsBtn.addEventListener('click', handleDownloadCaptions);
+    document.getElementById('save-all-btn').addEventListener('click', handleSaveAll);
 
-    modalSaveBtn.addEventListener('click', () => {
-        const row = document.querySelector(`tr[data-video-id="${currentlyEditingVideoId}"]`);
-        row.querySelector('.summary-cell').innerHTML = tinymce.get('tinymce-textarea').getContent();
-        descriptionModal.style.display = 'none';
-        tinymce.get('tinymce-textarea').remove();
+    // Setup Header Filter Buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => openFilterPanel(e.target.dataset.key, e.target));
     });
 
-    modalCancelBtn.addEventListener('click', () => {
-        descriptionModal.style.display = 'none';
-        if (tinymce.get('tinymce-textarea')) {
-            tinymce.get('tinymce-textarea').remove();
-        }
+    // Close panels when clicking outside
+    document.addEventListener('mousedown', (e) => {
+        const fp = document.getElementById('table-filter-panel');
+        const cp = document.getElementById('column-toggle-panel');
+        if (fp.style.display !== 'none' && !fp.contains(e.target) && !e.target.classList.contains('filter-btn')) fp.style.display = 'none';
+        if (cp.style.display !== 'none' && !cp.contains(e.target) && e.target.id !== 'toggle-columns-btn') cp.style.display = 'none';
     });
 
+    // Modals and Table Clicks
     videoTbody.addEventListener('click', (e) => {
         if (e.target.classList.contains('summary-cell')) {
             currentlyEditingVideoId = e.target.closest('tr').dataset.videoId;
-            descriptionModal.style.display = 'flex';
-            tinymce.init({
-                selector: '#tinymce-textarea',
-                height: 300,
-                menubar: false,
-                setup: (ed) => ed.on('init', () => ed.setContent(e.target.innerHTML))
-            });
+            document.getElementById('description-modal').style.display = 'flex';
+            tinymce.init({ selector: '#tinymce-textarea', height: 300, menubar: false, setup: ed => ed.on('init', () => ed.setContent(e.target.innerHTML)) });
         }
-        if (e.target.classList.contains('save-btn')) {
-            handleSave(e.target.closest('tr'));
-        }
+        if (e.target.classList.contains('save-btn')) handleSave(e.target.closest('tr'));
     });
 
+    document.getElementById('modal-save-btn').addEventListener('click', () => {
+        document.querySelector(`tr[data-video-id="${currentlyEditingVideoId}"] .summary-cell`).innerHTML = tinymce.get('tinymce-textarea').getContent();
+        document.getElementById('description-modal').style.display = 'none'; tinymce.get('tinymce-textarea').remove();
+    });
+
+    document.getElementById('modal-cancel-btn').addEventListener('click', () => {
+        document.getElementById('description-modal').style.display = 'none'; if (tinymce.get('tinymce-textarea')) tinymce.get('tinymce-textarea').remove();
+    });
+
+    // Checkbox logic
     videoTbody.addEventListener('change', (e) => {
         if (e.target.classList.contains('video-checkbox')) {
-            const id = e.target.dataset.videoId;
-            e.target.checked ? selectedVideoIds.add(id) : selectedVideoIds.delete(id);
-            bulkEditBar.style.display = selectedVideoIds.size > 0 ? 'block' : 'none';
-            selectionCounter.innerText = `${selectedVideoIds.size} video(s) selected`;
+            e.target.checked ? selectedVideoIds.add(e.target.dataset.videoId) : selectedVideoIds.delete(e.target.dataset.videoId);
+            updateSelectAllUI();
+            document.getElementById('bulk-edit-bar').style.display = selectedVideoIds.size > 0 ? 'block' : 'none';
+            document.getElementById('selection-counter').innerText = `${selectedVideoIds.size} video(s) selected`;
         }
-        
-        const allCheckboxes = document.querySelectorAll('.video-checkbox');
-        const allChecked = Array.from(allCheckboxes).every(c => c.checked);
-        selectAllCheckbox.checked = allCheckboxes.length > 0 && allChecked;
-    });
-    
-    selectAllCheckbox.addEventListener('change', (e) => {
-        const isChecked = e.target.checked;
-        const allCheckboxes = document.querySelectorAll('.video-checkbox');
-        allCheckboxes.forEach(checkbox => {
-            if (checkbox.closest('tr').style.display !== 'none') {
-                checkbox.checked = isChecked;
-                const id = checkbox.dataset.videoId;
-                isChecked ? selectedVideoIds.add(id) : selectedVideoIds.delete(id);
-            }
-        });
-        bulkEditBar.style.display = selectedVideoIds.size > 0 ? 'block' : 'none';
-        selectionCounter.innerText = `${selectedVideoIds.size} video(s) selected`;
     });
 
-    netlifyIdentity.on('login', user => startApp(user));
+    selectAllCheckbox.addEventListener('change', (e) => {
+        document.querySelectorAll('.video-checkbox').forEach(c => {
+            if (c.closest('tr').style.display !== 'none') {
+                c.checked = e.target.checked;
+                e.target.checked ? selectedVideoIds.add(c.dataset.videoId) : selectedVideoIds.delete(c.dataset.videoId);
+            }
+        });
+        document.getElementById('bulk-edit-bar').style.display = selectedVideoIds.size > 0 ? 'block' : 'none';
+        document.getElementById('selection-counter').innerText = `${selectedVideoIds.size} video(s) selected`;
+    });
+
+    netlifyIdentity.on('login', user => { currentUser = user; appContainer.style.display = 'block'; initColumnToggles(); fetchFolders(user); });
     netlifyIdentity.on('logout', () => location.reload());
-    
-    const user = netlifyIdentity.currentUser();
-    if (user) startApp(user);
+    if (netlifyIdentity.currentUser()) { currentUser = netlifyIdentity.currentUser(); appContainer.style.display = 'block'; initColumnToggles(); fetchFolders(currentUser); }
 });
