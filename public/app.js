@@ -56,7 +56,6 @@ const initColumnToggles = () => {
         columnTogglePanel.style.display = isHidden ? 'flex' : 'none';
     });
 
-    // Close panel if clicked outside
     document.addEventListener('click', (e) => {
         if (!columnTogglePanel.contains(e.target) && e.target !== toggleColumnsBtn) {
             columnTogglePanel.style.display = 'none';
@@ -73,7 +72,6 @@ searchInput.addEventListener('input', (e) => {
         row.style.display = text.includes(term) ? '' : 'none';
     });
 });
-
 
 // --- METADATA PARSING & ASSEMBLY ---
 const parseVimeoDescription = (fullText) => {
@@ -133,16 +131,30 @@ const fetchFolders = async (user) => {
 
 const fetchVideosByFolder = async () => {
     const uri = folderFilter.value;
+    if (!uri) return;
+
     tableContainer.style.display = 'block';
-    searchInput.disabled = true;
-    toggleColumnsBtn.disabled = true;
     videoTbody.innerHTML = '<tr><td colspan="16">Loading videos...</td></tr>';
     
-    const res = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(uri)}`, {
-        headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
-    });
-    const { data } = await res.json();
-    renderTable(data);
+    try {
+        const res = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(uri)}`, {
+            headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
+        });
+        
+        if (!res.ok) throw new Error('Failed to fetch videos from Vimeo API');
+        
+        const { data } = await res.json();
+        
+        if (data && data.length > 0) {
+            renderTable(data);
+        } else {
+            videoTbody.innerHTML = '<tr><td colspan="16">No videos found in this folder.</td></tr>';
+            saveAllBtn.style.display = 'none';
+        }
+    } catch (error) {
+        console.error(error);
+        videoTbody.innerHTML = '<tr><td colspan="16" style="color:red;">Error loading videos. Check the developer console.</td></tr>';
+    }
 };
 
 // --- TABLE RENDERING ---
@@ -180,8 +192,6 @@ const renderTable = (videos) => {
     });
     
     saveAllBtn.style.display = 'inline-block';
-    searchInput.disabled = false;
-    toggleColumnsBtn.disabled = false;
 };
 
 // --- SAVE LOGIC ---
@@ -216,7 +226,6 @@ const handleSave = async (row) => {
 };
 
 const handleSaveAll = async () => {
-    // Only save rows that are currently visible (respects search filter)
     const allRows = Array.from(videoTbody.querySelectorAll('tr')).filter(row => row.style.display !== 'none');
     saveAllBtn.innerText = 'Saving All...';
     saveAllBtn.disabled = true;
@@ -252,7 +261,7 @@ const handleBulkUpdate = () => {
     alert('Local metadata updated for selected videos. Don\'t forget to click Save All Changes!');
 };
 
-const handleDownloadCaptions = async () => { /* Remains identical to last version */
+const handleDownloadCaptions = async () => { 
     if (selectedVideoIds.size === 0) return alert('Select videos first');
     downloadCaptionsBtn.disabled = true;
     for (const id of selectedVideoIds) {
@@ -336,7 +345,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const isChecked = e.target.checked;
         const allCheckboxes = document.querySelectorAll('.video-checkbox');
         allCheckboxes.forEach(checkbox => {
-            // Only select visible rows (so Search works with Select All)
             if (checkbox.closest('tr').style.display !== 'none') {
                 checkbox.checked = isChecked;
                 const id = checkbox.dataset.videoId;
