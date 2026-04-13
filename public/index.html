@@ -18,7 +18,7 @@
             <div class="controls-left">
                 <div id="folder-selection">
                     <label for="folder-filter">Select a Folder:</label>
-                    <select id="folder-filter" disabled><option>Loading folders...</option></select>
+                    <select id="folder-filter"><option value="" disabled selected>Loading folders...</option></select>
                 </div>
                 <input type="text" id="search-input" placeholder="Search videos...">
             </div>
@@ -26,8 +26,7 @@
             <div class="controls-right">
                 <div class="column-toggle-wrapper">
                     <button id="toggle-columns-btn" class="btn-secondary">Columns ⚙️</button>
-                    <div id="column-toggle-panel" class="dropdown-panel" style="display:none;">
-                        </div>
+                    <div id="column-toggle-panel" class="dropdown-panel" style="display:none;"></div>
                 </div>
                 <button id="save-all-btn" style="display: none;">Save All Changes</button>
             </div>
@@ -69,18 +68,18 @@
                     <tr>
                         <th class="col-Checkbox"><input type="checkbox" id="select-all-checkbox"></th>
                         <th class="col-Summary">Summary (Click to Edit)</th>
-                        <th class="col-Title">Title</th>
-                        <th class="col-Series">Series</th>
-                        <th class="col-Date">Date</th>
-                        <th class="col-Minister">Minister</th>
-                        <th class="col-Scripture">Scripture</th>
-                        <th class="col-SupportingScripture">Supporting Scripture</th>
-                        <th class="col-EventType">Event Type</th>
-                        <th class="col-Topic">Topic</th>
-                        <th class="col-Features">Features</th>
-                        <th class="col-Holiday">Holiday</th>
-                        <th class="col-Location">Location</th>
-                        <th class="col-Audience">Audience</th>
+                        <th class="col-Title"><div class="th-content">Title <button class="filter-btn" data-key="Title">▼</button></div></th>
+                        <th class="col-Series"><div class="th-content">Series <button class="filter-btn" data-key="Series">▼</button></div></th>
+                        <th class="col-Date"><div class="th-content">Date <button class="filter-btn" data-key="Date">▼</button></div></th>
+                        <th class="col-Minister"><div class="th-content">Minister <button class="filter-btn" data-key="Minister">▼</button></div></th>
+                        <th class="col-Scripture"><div class="th-content">Scripture <button class="filter-btn" data-key="Scripture">▼</button></div></th>
+                        <th class="col-SupportingScripture"><div class="th-content">Supporting Scripture <button class="filter-btn" data-key="Supporting Scripture">▼</button></div></th>
+                        <th class="col-EventType"><div class="th-content">Event Type <button class="filter-btn" data-key="Event Type">▼</button></div></th>
+                        <th class="col-Topic"><div class="th-content">Topic <button class="filter-btn" data-key="Topic">▼</button></div></th>
+                        <th class="col-Features"><div class="th-content">Features <button class="filter-btn" data-key="Features">▼</button></div></th>
+                        <th class="col-Holiday"><div class="th-content">Holiday <button class="filter-btn" data-key="Holiday">▼</button></div></th>
+                        <th class="col-Location"><div class="th-content">Location <button class="filter-btn" data-key="Location">▼</button></div></th>
+                        <th class="col-Audience"><div class="th-content">Audience <button class="filter-btn" data-key="Audience">▼</button></div></th>
                         <th class="col-Manage">Manage</th>
                         <th class="col-Action">Action</th>
                     </tr>
@@ -89,6 +88,17 @@
             </table>
         </div>
     </main>
+
+    <div id="table-filter-panel" style="display: none;">
+        <div class="filter-panel-header">
+            <span id="filter-panel-title">Filter</span>
+        </div>
+        <div class="filter-panel-body" id="filter-panel-options"></div>
+        <div class="filter-panel-footer">
+            <button id="filter-panel-clear" class="btn-secondary">Clear</button>
+            <button id="filter-panel-apply" class="btn-primary">Apply</button>
+        </div>
+    </div>
 
     <div id="description-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
