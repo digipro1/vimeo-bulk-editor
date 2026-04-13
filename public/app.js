@@ -18,8 +18,12 @@ let originalVideoData = new Map();
 let selectedVideoIds = new Set(); 
 let currentlyEditingVideoId = null;
 
-// The core "Keys" from your Data Governance strategy
-const GOVERNANCE_KEYS = ['Minister', 'Scripture', 'Event Type', 'Topic', 'Location', 'Audience', 'Title', 'Date'];
+// ALL requested Data Governance keys
+const GOVERNANCE_KEYS = [
+    'Title', 'Series', 'Date', 'Minister', 'Scripture', 
+    'Supporting Scripture', 'Event Type', 'Topic', 
+    'Features', 'Holiday', 'Location', 'Audience'
+];
 
 // --- METADATA PARSING & ASSEMBLY ---
 const parseVimeoDescription = (fullText) => {
@@ -80,7 +84,7 @@ const fetchFolders = async (user) => {
 const fetchVideosByFolder = async () => {
     const uri = folderFilter.value;
     tableContainer.style.display = 'block';
-    videoTbody.innerHTML = '<tr><td colspan="9">Loading videos...</td></tr>';
+    videoTbody.innerHTML = '<tr><td colspan="16">Loading videos...</td></tr>';
     
     const res = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(uri)}`, {
         headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
@@ -102,15 +106,24 @@ const renderTable = (videos) => {
 
         const row = document.createElement('tr');
         row.dataset.videoId = videoId;
+        
+        // Match columns exactly to HTML table headers
         row.innerHTML = `
             <td><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
             <td class="summary-cell" style="cursor:pointer; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${summary || '(Edit Summary)'}</td>
+            <td contenteditable="true" class="meta-Title">${metadata['Title'] || ''}</td>
+            <td contenteditable="true" class="meta-Series">${metadata['Series'] || ''}</td>
+            <td contenteditable="true" class="meta-Date">${metadata['Date'] || ''}</td>
             <td contenteditable="true" class="meta-Minister">${metadata['Minister'] || ''}</td>
             <td contenteditable="true" class="meta-Scripture">${metadata['Scripture'] || ''}</td>
+            <td contenteditable="true" class="meta-SupportingScripture">${metadata['Supporting Scripture'] || ''}</td>
             <td contenteditable="true" class="meta-EventType">${metadata['Event Type'] || ''}</td>
             <td contenteditable="true" class="meta-Topic">${metadata['Topic'] || ''}</td>
+            <td contenteditable="true" class="meta-Features">${metadata['Features'] || ''}</td>
+            <td contenteditable="true" class="meta-Holiday">${metadata['Holiday'] || ''}</td>
             <td contenteditable="true" class="meta-Location">${metadata['Location'] || ''}</td>
             <td contenteditable="true" class="meta-Audience">${metadata['Audience'] || ''}</td>
+            <td><a href="https://vimeo.com/manage/videos/${videoId}" target="_blank" class="manage-link">Manage</a></td>
             <td><button class="save-btn">Save</button></td>
         `;
         videoTbody.appendChild(row);
@@ -169,7 +182,44 @@ const handleBulkUpdate = () => {
             }
         });
     });
-    alert('Local metadata updated for selected videos.');
+    alert('Local metadata updated for selected videos. Don\'t forget to click Save All Changes!');
+};
+
+const handleSaveAll = async () => {
+    const allRows = videoTbody.querySelectorAll('tr');
+    saveAllBtn.innerText = 'Saving All...';
+    saveAllBtn.disabled = true;
+    
+    for (const row of allRows) {
+        await handleSave(row);
+    }
+    
+    saveAllBtn.innerText = 'Save All Changes';
+    saveAllBtn.disabled = false;
+};
+
+// --- CAPTION DOWNLOAD ---
+const handleDownloadCaptions = async () => {
+    if (selectedVideoIds.size === 0) return alert('Select videos first');
+    downloadCaptionsBtn.disabled = true;
+    for (const id of selectedVideoIds) {
+        try {
+            const res = await fetch(`/api/get-captions?videoId=${id}`, {
+                headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
+            });
+            const tracks = await res.json();
+            if (tracks.length > 0) {
+                const fileRes = await fetch(tracks[0].link);
+                const text = await fileRes.text();
+                const blob = new Blob([text], { type: 'text/vtt' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `captions_${id}.vtt`;
+                a.click();
+            }
+        } catch (e) { console.error(e); }
+    }
+    downloadCaptionsBtn.disabled = false;
 };
 
 // --- AUTH & EVENT LISTENERS ---
@@ -182,6 +232,8 @@ const startApp = (user) => {
 document.addEventListener('DOMContentLoaded', () => {
     folderFilter.addEventListener('change', fetchVideosByFolder);
     applyBulkEditBtn.addEventListener('click', handleBulkUpdate);
+    saveAllBtn.addEventListener('click', handleSaveAll);
+    downloadCaptionsBtn.addEventListener('click', handleDownloadCaptions);
 
     // Modal Events
     modalSaveBtn.addEventListener('click', () => {
@@ -193,7 +245,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     modalCancelBtn.addEventListener('click', () => {
         descriptionModal.style.display = 'none';
-        tinymce.get('tinymce-textarea').remove();
+        if (tinymce.get('tinymce-textarea')) {
+            tinymce.get('tinymce-textarea').remove();
+        }
     });
 
     videoTbody.addEventListener('click', (e) => {
@@ -219,6 +273,22 @@ document.addEventListener('DOMContentLoaded', () => {
             bulkEditBar.style.display = selectedVideoIds.size > 0 ? 'block' : 'none';
             selectionCounter.innerText = `${selectedVideoIds.size} video(s) selected`;
         }
+        
+        const allCheckboxes = document.querySelectorAll('.video-checkbox');
+        const allChecked = Array.from(allCheckboxes).every(c => c.checked);
+        selectAllCheckbox.checked = allCheckboxes.length > 0 && allChecked;
+    });
+    
+    selectAllCheckbox.addEventListener('change', (e) => {
+        const isChecked = e.target.checked;
+        const allCheckboxes = document.querySelectorAll('.video-checkbox');
+        allCheckboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+            const id = checkbox.dataset.videoId;
+            isChecked ? selectedVideoIds.add(id) : selectedVideoIds.delete(id);
+        });
+        bulkEditBar.style.display = selectedVideoIds.size > 0 ? 'block' : 'none';
+        selectionCounter.innerText = `${selectedVideoIds.size} video(s) selected`;
     });
 
     // Netlify Auth Flow
