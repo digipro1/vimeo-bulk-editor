@@ -1,36 +1,319 @@
-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85rem; /* Slightly smaller for more columns */
+/* --- Global & Variables --- */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+
+:root {
+    --dark-bg: #1B242F;
+    --accent-blue: #0072CE;
+    --accent-hover: #005fa3;
+    --light-text: #FFFFFF;
+    --dark-text: #333333;
+    --border-color: #EAEAEA;
+    --bg-color: #F8F9FA;
+    --editable-bg: #FFFDE7; /* Light yellow to highlight editable cells */
+    --modal-overlay: rgba(0, 0, 0, 0.6);
 }
 
-th, td {
-    padding: 10px;
-    border: 1px solid #ddd;
-    text-align: left;
+body {
+    font-family: 'Montserrat', sans-serif;
+    margin: 0;
+    background-color: var(--bg-color);
+    color: var(--dark-text);
 }
 
-[contenteditable="true"] {
-    background-color: #fffde7; /* Light yellow to show it's editable */
-    min-width: 100px;
+/* --- Header --- */
+header {
+    background-color: var(--dark-bg);
+    color: var(--light-text);
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 4px solid var(--accent-blue);
 }
 
-.summary-cell {
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    max-width: 150px;
+header h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
 }
 
+/* Netlify Identity Buttons */
+[data-netlify-identity-button] a,
+[data-netlify-identity-button] button {
+    color: var(--light-text);
+    text-decoration: none;
+    background: none;
+    border: none;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.5rem;
+}
+
+[data-netlify-identity-button] a:hover,
+[data-netlify-identity-button] button:hover {
+    text-decoration: underline;
+}
+
+[data-netlify-identity-button] a + a {
+    display: none; /* Hide duplicate buttons */
+}
+
+/* --- Main Layout & Controls --- */
+main {
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+#controls-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    background: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+#folder-selection {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+}
+
+select, input[type="text"] {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: 'Montserrat', sans-serif;
+}
+
+/* --- Bulk Edit Bar --- */
 #bulk-edit-bar {
     background: #e3f2fd;
-    padding: 20px;
+    padding: 1.5rem;
     border-radius: 8px;
-    margin-bottom: 20px;
+    margin-bottom: 1.5rem;
     border: 1px solid #bbdefb;
+}
+
+.bulk-edit-header {
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: var(--accent-blue);
 }
 
 .bulk-edit-fields {
     display: flex;
     flex-wrap: wrap;
-    gap: 15px;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.field-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #555;
+}
+
+.bulk-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+/* --- Buttons --- */
+button {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: all 0.2s ease;
+}
+
+#save-all-btn, .btn-primary, #apply-bulk-edit-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+}
+
+#save-all-btn:hover, .btn-primary:hover, #apply-bulk-edit-btn:hover {
+    background-color: #218838;
+}
+
+#download-captions-btn {
+    padding: 0.75rem 1.5rem;
+    border: 1px solid var(--accent-blue);
+    background-color: transparent;
+    color: var(--accent-blue);
+}
+
+#download-captions-btn:hover {
+    background-color: var(--accent-blue);
+    color: white;
+}
+
+.save-btn {
+    background-color: var(--accent-blue);
+    color: white;
+    border: none;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+}
+
+.save-btn:hover {
+    background-color: var(--accent-hover);
+}
+
+button:disabled {
+    background-color: #B0BEC5 !important;
+    border-color: #B0BEC5 !important;
+    color: white !important;
+    cursor: not-allowed;
+}
+
+/* --- Data Grid / Table --- */
+#table-container {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    overflow-x: auto; /* Scroll horizontally if too many columns */
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+thead {
+    background-color: #f4f6f8;
+    border-bottom: 2px solid var(--border-color);
+}
+
+th, td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+    vertical-align: middle;
+}
+
+th {
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+}
+
+tbody tr:hover {
+    background-color: #fafafa;
+}
+
+/* Editable Cell Styling */
+[contenteditable="true"] {
+    background-color: var(--editable-bg);
+    border: 1px solid transparent;
+    transition: border 0.2s;
+    min-width: 100px;
+    outline: none;
+}
+
+[contenteditable="true"]:focus {
+    border: 1px solid var(--accent-blue);
+    background-color: #fff;
+}
+
+/* Summary Cell Special Styling */
+.summary-cell {
+    color: var(--accent-blue);
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    transition: text-decoration-color 0.2s;
+}
+
+.summary-cell:hover {
+    text-decoration-color: var(--accent-blue);
+    background-color: #f0f7ff;
+}
+
+/* --- Modal Styles --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--modal-overlay);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 800px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 2rem;
+    font-weight: 300;
+    cursor: pointer;
+    color: #888;
+    padding: 0;
+    line-height: 1;
+}
+
+.modal-body {
+    z-index: 1001; 
+}
+
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+.btn-secondary {
+    padding: 0.75rem 1.5rem;
+    border: 1px solid #6c757d;
+    background-color: transparent;
+    color: #6c757d;
+}
+
+.btn-secondary:hover {
+    background-color: #f8f9fa;
 }
