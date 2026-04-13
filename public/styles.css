@@ -9,7 +9,7 @@
     --dark-text: #333333;
     --border-color: #EAEAEA;
     --bg-color: #F8F9FA;
-    --editable-bg: #FFFDE7; /* Light yellow to highlight editable cells */
+    --editable-bg: #FFFDE7;
     --modal-overlay: rgba(0, 0, 0, 0.6);
 }
 
@@ -20,7 +20,6 @@ body {
     color: var(--dark-text);
 }
 
-/* --- Header --- */
 header {
     background-color: var(--dark-bg);
     color: var(--light-text);
@@ -37,7 +36,6 @@ header h1 {
     font-weight: 700;
 }
 
-/* Netlify Identity Buttons */
 [data-netlify-identity-button] a,
 [data-netlify-identity-button] button {
     color: var(--light-text);
@@ -57,14 +55,15 @@ header h1 {
 }
 
 [data-netlify-identity-button] a + a {
-    display: none; /* Hide duplicate buttons */
+    display: none;
 }
 
-/* --- Main Layout & Controls --- */
+/* --- Main Layout --- */
 main {
     padding: 2rem;
-    max-width: 1400px;
+    max-width: 100%; /* Changed to 100% for full width */
     margin: 0 auto;
+    box-sizing: border-box;
 }
 
 #controls-container {
@@ -92,7 +91,6 @@ select, input[type="text"] {
     font-family: 'Montserrat', sans-serif;
 }
 
-/* --- Bulk Edit Bar --- */
 #bulk-edit-bar {
     background: #e3f2fd;
     padding: 1.5rem;
@@ -131,7 +129,6 @@ select, input[type="text"] {
     gap: 1rem;
 }
 
-/* --- Buttons --- */
 button {
     font-family: 'Montserrat', sans-serif;
     font-weight: 600;
@@ -182,12 +179,12 @@ button:disabled {
     cursor: not-allowed;
 }
 
-/* --- Data Grid / Table --- */
+/* --- Table --- */
 #table-container {
     background: white;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    overflow-x: auto; /* Scroll horizontally if too many columns */
+    overflow-x: auto;
 }
 
 table {
@@ -214,13 +211,13 @@ th {
     text-transform: uppercase;
     font-size: 0.75rem;
     letter-spacing: 0.5px;
+    white-space: nowrap; /* Prevents headers from stacking weirdly */
 }
 
 tbody tr:hover {
     background-color: #fafafa;
 }
 
-/* Editable Cell Styling */
 [contenteditable="true"] {
     background-color: var(--editable-bg);
     border: 1px solid transparent;
@@ -234,7 +231,6 @@ tbody tr:hover {
     background-color: #fff;
 }
 
-/* Summary Cell Special Styling */
 .summary-cell {
     color: var(--accent-blue);
     text-decoration: underline;
@@ -245,6 +241,16 @@ tbody tr:hover {
 .summary-cell:hover {
     text-decoration-color: var(--accent-blue);
     background-color: #f0f7ff;
+}
+
+.manage-link {
+    color: var(--accent-blue);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.manage-link:hover {
+    text-decoration: underline;
 }
 
 /* --- Modal Styles --- */
