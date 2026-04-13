@@ -51,6 +51,44 @@ const assembleVimeoDescription = (summary, metadata) => {
     return newDesc.trim();
 };
 
+// --- API FETCHING ---
+const fetchFolders = async (user) => {
+    try {
+        let allFolders = [];
+        let nextPagePath = null;
+        do {
+            const fetchUrl = nextPagePath ? `/api/get-folders?page=${encodeURIComponent(nextPagePath)}` : '/api/get-folders';
+            const response = await fetch(fetchUrl, { headers: { Authorization: `Bearer ${user.token.access_token}` } });
+            const pageData = await response.json();
+            allFolders = allFolders.concat(pageData.folders);
+            nextPagePath = pageData.nextPagePath;
+        } while (nextPagePath);
+
+        folderFilter.innerHTML = '<option value="" disabled selected>Select a folder...</option>';
+        allFolders.sort((a, b) => a.name.localeCompare(b.name)).forEach(folder => {
+            const option = document.createElement('option');
+            option.value = folder.uri;
+            option.textContent = folder.name;
+            folderFilter.appendChild(option);
+        });
+        folderFilter.disabled = false;
+    } catch (error) {
+        console.error('Error fetching folders:', error);
+    }
+};
+
+const fetchVideosByFolder = async () => {
+    const uri = folderFilter.value;
+    tableContainer.style.display = 'block';
+    videoTbody.innerHTML = '<tr><td colspan="9">Loading videos...</td></tr>';
+    
+    const res = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(uri)}`, {
+        headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
+    });
+    const { data } = await res.json();
+    renderTable(data);
+};
+
 // --- TABLE RENDERING ---
 const renderTable = (videos) => {
     videoTbody.innerHTML = '';
@@ -60,14 +98,13 @@ const renderTable = (videos) => {
         const videoId = video.uri.split('/').pop();
         const { summary, metadata } = parseVimeoDescription(video.description || '');
         
-        // Store the parsed state
         originalVideoData.set(videoId, { summary, metadata, name: video.name });
 
         const row = document.createElement('tr');
         row.dataset.videoId = videoId;
         row.innerHTML = `
             <td><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
-            <td class="summary-cell" style="cursor:pointer; max-width:200px; overflow:hidden;">${summary || '(Edit Summary)'}</td>
+            <td class="summary-cell" style="cursor:pointer; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${summary || '(Edit Summary)'}</td>
             <td contenteditable="true" class="meta-Minister">${metadata['Minister'] || ''}</td>
             <td contenteditable="true" class="meta-Scripture">${metadata['Scripture'] || ''}</td>
             <td contenteditable="true" class="meta-EventType">${metadata['Event Type'] || ''}</td>
@@ -78,11 +115,10 @@ const renderTable = (videos) => {
         `;
         videoTbody.appendChild(row);
     });
-    tableContainer.style.display = 'block';
     saveAllBtn.style.display = 'inline-block';
 };
 
-// --- INDIVIDUAL SAVE ---
+// --- SAVE LOGIC ---
 const handleSave = async (row) => {
     const videoId = row.dataset.videoId;
     const saveBtn = row.querySelector('.save-btn');
@@ -109,12 +145,11 @@ const handleSave = async (row) => {
             setTimeout(() => saveBtn.innerText = 'Save', 2000);
         }
     } catch (err) {
-        console.error(err);
         saveBtn.innerText = 'Error';
     }
 };
 
-// --- BULK UPDATE LOGIC ---
+// --- BULK ACTIONS ---
 const handleBulkUpdate = () => {
     const bulkVals = {
         'Event Type': document.getElementById('bulk-event-type').value,
@@ -134,52 +169,29 @@ const handleBulkUpdate = () => {
             }
         });
     });
-    alert('Local changes applied to selected. Click Save to upload to Vimeo.');
+    alert('Local metadata updated for selected videos.');
 };
 
-// --- CAPTION DOWNLOAD ---
-const handleDownloadCaptions = async () => {
-    if (selectedVideoIds.size === 0) return alert('Select videos first');
-    downloadCaptionsBtn.disabled = true;
-    for (const id of selectedVideoIds) {
-        try {
-            const res = await fetch(`/api/get-captions?videoId=${id}`, {
-                headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
-            });
-            const tracks = await res.json();
-            if (tracks.length > 0) {
-                const fileRes = await fetch(tracks[0].link);
-                const text = await fileRes.text();
-                const blob = new Blob([text], { type: 'text/vtt' });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `captions_${id}.vtt`;
-                a.click();
-            }
-        } catch (e) { console.error(e); }
-    }
-    downloadCaptionsBtn.disabled = false;
-};
-
-// --- APP FLOW ---
-const fetchVideosByFolder = async () => {
-    const uri = folderFilter.value;
-    const res = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(uri)}`, {
-        headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
-    });
-    const { data } = await res.json();
-    renderTable(data);
+// --- AUTH & EVENT LISTENERS ---
+const startApp = (user) => {
+    currentUser = user;
+    appContainer.style.display = 'block';
+    fetchFolders(user);
 };
 
 document.addEventListener('DOMContentLoaded', () => {
     folderFilter.addEventListener('change', fetchVideosByFolder);
     applyBulkEditBtn.addEventListener('click', handleBulkUpdate);
-    downloadCaptionsBtn.addEventListener('click', handleDownloadCaptions);
 
     // Modal Events
     modalSaveBtn.addEventListener('click', () => {
         const row = document.querySelector(`tr[data-video-id="${currentlyEditingVideoId}"]`);
         row.querySelector('.summary-cell').innerHTML = tinymce.get('tinymce-textarea').getContent();
+        descriptionModal.style.display = 'none';
+        tinymce.get('tinymce-textarea').remove();
+    });
+
+    modalCancelBtn.addEventListener('click', () => {
         descriptionModal.style.display = 'none';
         tinymce.get('tinymce-textarea').remove();
     });
@@ -209,9 +221,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    netlifyIdentity.on('login', user => {
-        currentUser = user;
-        appContainer.style.display = 'block';
-        // Add folder fetching logic here
-    });
+    // Netlify Auth Flow
+    netlifyIdentity.on('login', user => startApp(user));
+    netlifyIdentity.on('logout', () => location.reload());
+    
+    const user = netlifyIdentity.currentUser();
+    if (user) startApp(user);
 });
