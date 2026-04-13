@@ -19,7 +19,7 @@ let originalVideoData = new Map();
 let selectedVideoIds = new Set(); 
 let currentlyEditingVideoId = null;
 
-// The core categories
+// The core Data Governance categories
 const GOVERNANCE_KEYS = [
     'Title', 'Series', 'Date', 'Minister', 'Scripture', 
     'Supporting Scripture', 'Event Type', 'Topic', 
@@ -29,7 +29,7 @@ const GOVERNANCE_KEYS = [
 // Identify which ones are arrays (comma separated)
 const MULTI_VALUE_KEYS = ['Features', 'Holiday', 'Topic', 'Supporting Scripture'];
 
-// The active filters chosen by the user
+// The active filters chosen by the user in the column headers
 const activeFilters = {}; 
 let currentFilterPanelKey = null;
 
@@ -227,7 +227,13 @@ const fetchVideosByFolder = async () => {
             headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
         });
         const { data } = await res.json();
-        renderTable(data);
+        
+        if (data && data.length > 0) {
+            renderTable(data);
+        } else {
+            videoTbody.innerHTML = '<tr><td colspan="16">No videos found in this folder.</td></tr>';
+            saveAllBtn.style.display = 'none';
+        }
     } catch (error) {
         videoTbody.innerHTML = '<tr><td colspan="16" style="color:red;">Error loading videos.</td></tr>';
     }
@@ -248,7 +254,7 @@ const renderTable = (videos) => {
         row.dataset.videoId = videoId;
         row.innerHTML = `
             <td class="col-Checkbox"><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
-            <td class="col-Summary summary-cell" style="cursor:pointer; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${summary || '(Edit)'}</td>
+            <td class="col-Summary summary-cell" style="cursor:pointer; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${summary || '(Edit Summary)'}</td>
             ${GOVERNANCE_KEYS.map(k => `<td contenteditable="true" class="col-${k.replace(/\s+/g, '')} meta-${k.replace(/\s+/g, '')}">${metadata[k] || ''}</td>`).join('')}
             <td class="col-Manage"><a href="https://vimeo.com/manage/videos/${videoId}" target="_blank" class="manage-link">Manage</a></td>
             <td class="col-Action"><button class="save-btn">Save</button></td>
@@ -294,11 +300,67 @@ const handleSaveAll = async () => {
     saveAllBtn.innerText = 'Save All Changes'; saveAllBtn.disabled = false;
 };
 
+const handleBulkUpdate = () => {
+    const bulkVals = {
+        'Event Type': document.getElementById('bulk-event-type').value,
+        'Series': document.getElementById('bulk-series').value.trim(),
+        'Minister': document.getElementById('bulk-minister').value.trim(),
+        'Location': document.getElementById('bulk-location').value.trim(),
+        'Audience': document.getElementById('bulk-audience').value
+    };
+
+    selectedVideoIds.forEach(id => {
+        const row = document.querySelector(`tr[data-video-id="${id}"]`);
+        if (!row) return;
+        Object.keys(bulkVals).forEach(key => {
+            if (bulkVals[key]) {
+                const cleanKey = key.replace(/\s+/g, '');
+                const cell = row.querySelector(`.meta-${cleanKey}`);
+                if (cell) cell.innerText = bulkVals[key];
+            }
+        });
+    });
+    
+    // Clear inputs after applying
+    document.getElementById('bulk-event-type').value = '';
+    document.getElementById('bulk-series').value = '';
+    document.getElementById('bulk-minister').value = '';
+    document.getElementById('bulk-location').value = '';
+    document.getElementById('bulk-audience').value = '';
+    
+    alert('Local metadata updated for selected videos. Don\'t forget to click Save All Changes!');
+};
+
+const handleDownloadCaptions = async () => {
+    if (selectedVideoIds.size === 0) return alert('Select videos first');
+    downloadCaptionsBtn.disabled = true;
+    for (const id of selectedVideoIds) {
+        try {
+            const res = await fetch(`/api/get-captions?videoId=${id}`, {
+                headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
+            });
+            const tracks = await res.json();
+            if (tracks.length > 0) {
+                const fileRes = await fetch(tracks[0].link);
+                const text = await fileRes.text();
+                const blob = new Blob([text], { type: 'text/vtt' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `captions_${id}.vtt`;
+                a.click();
+            }
+        } catch (e) { console.error(e); }
+    }
+    downloadCaptionsBtn.disabled = false;
+};
+
 // --- EVENT LISTENERS ---
 document.addEventListener('DOMContentLoaded', () => {
     searchInput.addEventListener('input', applyTableFilters);
     folderFilter.addEventListener('change', fetchVideosByFolder);
+    document.getElementById('apply-bulk-edit-btn').addEventListener('click', handleBulkUpdate);
     document.getElementById('save-all-btn').addEventListener('click', handleSaveAll);
+    downloadCaptionsBtn.addEventListener('click', handleDownloadCaptions);
 
     // Setup Header Filter Buttons
     document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -309,8 +371,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('mousedown', (e) => {
         const fp = document.getElementById('table-filter-panel');
         const cp = document.getElementById('column-toggle-panel');
-        if (fp.style.display !== 'none' && !fp.contains(e.target) && !e.target.classList.contains('filter-btn')) fp.style.display = 'none';
-        if (cp.style.display !== 'none' && !cp.contains(e.target) && e.target.id !== 'toggle-columns-btn') cp.style.display = 'none';
+        if (fp && fp.style.display !== 'none' && !fp.contains(e.target) && !e.target.classList.contains('filter-btn')) fp.style.display = 'none';
+        if (cp && cp.style.display !== 'none' && !cp.contains(e.target) && e.target.id !== 'toggle-columns-btn') cp.style.display = 'none';
     });
 
     // Modals and Table Clicks
@@ -353,6 +415,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('selection-counter').innerText = `${selectedVideoIds.size} video(s) selected`;
     });
 
+    // Auth flows
     netlifyIdentity.on('login', user => { currentUser = user; appContainer.style.display = 'block'; initColumnToggles(); fetchFolders(user); });
     netlifyIdentity.on('logout', () => location.reload());
     if (netlifyIdentity.currentUser()) { currentUser = netlifyIdentity.currentUser(); appContainer.style.display = 'block'; initColumnToggles(); fetchFolders(currentUser); }
