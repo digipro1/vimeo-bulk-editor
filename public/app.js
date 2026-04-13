@@ -1,6 +1,10 @@
 const appContainer = document.getElementById('app-container');
 const folderFilter = document.getElementById('folder-filter');
+const searchInput = document.getElementById('search-input');
+const toggleColumnsBtn = document.getElementById('toggle-columns-btn');
+const columnTogglePanel = document.getElementById('column-toggle-panel');
 const tableContainer = document.getElementById('table-container');
+const videoTable = document.getElementById('video-table');
 const videoTbody = document.getElementById('video-list');
 const saveAllBtn = document.getElementById('save-all-btn');
 const bulkEditBar = document.getElementById('bulk-edit-bar');
@@ -18,12 +22,58 @@ let originalVideoData = new Map();
 let selectedVideoIds = new Set(); 
 let currentlyEditingVideoId = null;
 
-// ALL requested Data Governance keys
 const GOVERNANCE_KEYS = [
     'Title', 'Series', 'Date', 'Minister', 'Scripture', 
     'Supporting Scripture', 'Event Type', 'Topic', 
     'Features', 'Holiday', 'Location', 'Audience'
 ];
+
+// --- COLUMN TOGGLE SETUP ---
+const initColumnToggles = () => {
+    const columnsToToggle = ['Summary', ...GOVERNANCE_KEYS];
+    columnTogglePanel.innerHTML = '';
+    
+    columnsToToggle.forEach(col => {
+        const cleanCol = col.replace(/\s+/g, '');
+        const label = document.createElement('label');
+        label.innerHTML = `<input type="checkbox" checked data-col="${cleanCol}"> ${col}`;
+        columnTogglePanel.appendChild(label);
+    });
+
+    columnTogglePanel.addEventListener('change', (e) => {
+        if(e.target.tagName === 'INPUT') {
+            const colName = e.target.dataset.col;
+            if(e.target.checked) {
+                videoTable.classList.remove(`hide-col-${colName}`);
+            } else {
+                videoTable.classList.add(`hide-col-${colName}`);
+            }
+        }
+    });
+
+    toggleColumnsBtn.addEventListener('click', () => {
+        const isHidden = columnTogglePanel.style.display === 'none';
+        columnTogglePanel.style.display = isHidden ? 'flex' : 'none';
+    });
+
+    // Close panel if clicked outside
+    document.addEventListener('click', (e) => {
+        if (!columnTogglePanel.contains(e.target) && e.target !== toggleColumnsBtn) {
+            columnTogglePanel.style.display = 'none';
+        }
+    });
+};
+
+// --- LIVE SEARCH ---
+searchInput.addEventListener('input', (e) => {
+    const term = e.target.value.toLowerCase();
+    const rows = videoTbody.querySelectorAll('tr');
+    rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        row.style.display = text.includes(term) ? '' : 'none';
+    });
+});
+
 
 // --- METADATA PARSING & ASSEMBLY ---
 const parseVimeoDescription = (fullText) => {
@@ -84,6 +134,8 @@ const fetchFolders = async (user) => {
 const fetchVideosByFolder = async () => {
     const uri = folderFilter.value;
     tableContainer.style.display = 'block';
+    searchInput.disabled = true;
+    toggleColumnsBtn.disabled = true;
     videoTbody.innerHTML = '<tr><td colspan="16">Loading videos...</td></tr>';
     
     const res = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(uri)}`, {
@@ -101,34 +153,35 @@ const renderTable = (videos) => {
     videos.forEach(video => {
         const videoId = video.uri.split('/').pop();
         const { summary, metadata } = parseVimeoDescription(video.description || '');
-        
         originalVideoData.set(videoId, { summary, metadata, name: video.name });
 
         const row = document.createElement('tr');
         row.dataset.videoId = videoId;
         
-        // Match columns exactly to HTML table headers
         row.innerHTML = `
-            <td><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
-            <td class="summary-cell" style="cursor:pointer; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${summary || '(Edit Summary)'}</td>
-            <td contenteditable="true" class="meta-Title">${metadata['Title'] || ''}</td>
-            <td contenteditable="true" class="meta-Series">${metadata['Series'] || ''}</td>
-            <td contenteditable="true" class="meta-Date">${metadata['Date'] || ''}</td>
-            <td contenteditable="true" class="meta-Minister">${metadata['Minister'] || ''}</td>
-            <td contenteditable="true" class="meta-Scripture">${metadata['Scripture'] || ''}</td>
-            <td contenteditable="true" class="meta-SupportingScripture">${metadata['Supporting Scripture'] || ''}</td>
-            <td contenteditable="true" class="meta-EventType">${metadata['Event Type'] || ''}</td>
-            <td contenteditable="true" class="meta-Topic">${metadata['Topic'] || ''}</td>
-            <td contenteditable="true" class="meta-Features">${metadata['Features'] || ''}</td>
-            <td contenteditable="true" class="meta-Holiday">${metadata['Holiday'] || ''}</td>
-            <td contenteditable="true" class="meta-Location">${metadata['Location'] || ''}</td>
-            <td contenteditable="true" class="meta-Audience">${metadata['Audience'] || ''}</td>
-            <td><a href="https://vimeo.com/manage/videos/${videoId}" target="_blank" class="manage-link">Manage</a></td>
-            <td><button class="save-btn">Save</button></td>
+            <td class="col-Checkbox"><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
+            <td class="col-Summary summary-cell" style="cursor:pointer; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${summary || '(Edit Summary)'}</td>
+            <td contenteditable="true" class="col-Title meta-Title">${metadata['Title'] || ''}</td>
+            <td contenteditable="true" class="col-Series meta-Series">${metadata['Series'] || ''}</td>
+            <td contenteditable="true" class="col-Date meta-Date">${metadata['Date'] || ''}</td>
+            <td contenteditable="true" class="col-Minister meta-Minister">${metadata['Minister'] || ''}</td>
+            <td contenteditable="true" class="col-Scripture meta-Scripture">${metadata['Scripture'] || ''}</td>
+            <td contenteditable="true" class="col-SupportingScripture meta-SupportingScripture">${metadata['Supporting Scripture'] || ''}</td>
+            <td contenteditable="true" class="col-EventType meta-EventType">${metadata['Event Type'] || ''}</td>
+            <td contenteditable="true" class="col-Topic meta-Topic">${metadata['Topic'] || ''}</td>
+            <td contenteditable="true" class="col-Features meta-Features">${metadata['Features'] || ''}</td>
+            <td contenteditable="true" class="col-Holiday meta-Holiday">${metadata['Holiday'] || ''}</td>
+            <td contenteditable="true" class="col-Location meta-Location">${metadata['Location'] || ''}</td>
+            <td contenteditable="true" class="col-Audience meta-Audience">${metadata['Audience'] || ''}</td>
+            <td class="col-Manage"><a href="https://vimeo.com/manage/videos/${videoId}" target="_blank" class="manage-link">Manage</a></td>
+            <td class="col-Action"><button class="save-btn">Save</button></td>
         `;
         videoTbody.appendChild(row);
     });
+    
     saveAllBtn.style.display = 'inline-block';
+    searchInput.disabled = false;
+    toggleColumnsBtn.disabled = false;
 };
 
 // --- SAVE LOGIC ---
@@ -162,6 +215,20 @@ const handleSave = async (row) => {
     }
 };
 
+const handleSaveAll = async () => {
+    // Only save rows that are currently visible (respects search filter)
+    const allRows = Array.from(videoTbody.querySelectorAll('tr')).filter(row => row.style.display !== 'none');
+    saveAllBtn.innerText = 'Saving All...';
+    saveAllBtn.disabled = true;
+    
+    for (const row of allRows) {
+        await handleSave(row);
+    }
+    
+    saveAllBtn.innerText = 'Save All Changes';
+    saveAllBtn.disabled = false;
+};
+
 // --- BULK ACTIONS ---
 const handleBulkUpdate = () => {
     const bulkVals = {
@@ -185,21 +252,7 @@ const handleBulkUpdate = () => {
     alert('Local metadata updated for selected videos. Don\'t forget to click Save All Changes!');
 };
 
-const handleSaveAll = async () => {
-    const allRows = videoTbody.querySelectorAll('tr');
-    saveAllBtn.innerText = 'Saving All...';
-    saveAllBtn.disabled = true;
-    
-    for (const row of allRows) {
-        await handleSave(row);
-    }
-    
-    saveAllBtn.innerText = 'Save All Changes';
-    saveAllBtn.disabled = false;
-};
-
-// --- CAPTION DOWNLOAD ---
-const handleDownloadCaptions = async () => {
+const handleDownloadCaptions = async () => { /* Remains identical to last version */
     if (selectedVideoIds.size === 0) return alert('Select videos first');
     downloadCaptionsBtn.disabled = true;
     for (const id of selectedVideoIds) {
@@ -226,6 +279,7 @@ const handleDownloadCaptions = async () => {
 const startApp = (user) => {
     currentUser = user;
     appContainer.style.display = 'block';
+    initColumnToggles();
     fetchFolders(user);
 };
 
@@ -235,7 +289,6 @@ document.addEventListener('DOMContentLoaded', () => {
     saveAllBtn.addEventListener('click', handleSaveAll);
     downloadCaptionsBtn.addEventListener('click', handleDownloadCaptions);
 
-    // Modal Events
     modalSaveBtn.addEventListener('click', () => {
         const row = document.querySelector(`tr[data-video-id="${currentlyEditingVideoId}"]`);
         row.querySelector('.summary-cell').innerHTML = tinymce.get('tinymce-textarea').getContent();
@@ -283,15 +336,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const isChecked = e.target.checked;
         const allCheckboxes = document.querySelectorAll('.video-checkbox');
         allCheckboxes.forEach(checkbox => {
-            checkbox.checked = isChecked;
-            const id = checkbox.dataset.videoId;
-            isChecked ? selectedVideoIds.add(id) : selectedVideoIds.delete(id);
+            // Only select visible rows (so Search works with Select All)
+            if (checkbox.closest('tr').style.display !== 'none') {
+                checkbox.checked = isChecked;
+                const id = checkbox.dataset.videoId;
+                isChecked ? selectedVideoIds.add(id) : selectedVideoIds.delete(id);
+            }
         });
         bulkEditBar.style.display = selectedVideoIds.size > 0 ? 'block' : 'none';
         selectionCounter.innerText = `${selectedVideoIds.size} video(s) selected`;
     });
 
-    // Netlify Auth Flow
     netlifyIdentity.on('login', user => startApp(user));
     netlifyIdentity.on('logout', () => location.reload());
     
