@@ -1,22 +1,29 @@
 const appContainer = document.getElementById('app-container');
-const videoTbody = document.getElementById('video-list');
 const folderFilter = document.getElementById('folder-filter');
+const tableContainer = document.getElementById('table-container');
+const videoTbody = document.getElementById('video-list');
+const saveAllBtn = document.getElementById('save-all-btn');
 const bulkEditBar = document.getElementById('bulk-edit-bar');
 const selectionCounter = document.getElementById('selection-counter');
 const selectAllCheckbox = document.getElementById('select-all-checkbox');
+const applyBulkEditBtn = document.getElementById('apply-bulk-edit-btn');
 const downloadCaptionsBtn = document.getElementById('download-captions-btn');
 const descriptionModal = document.getElementById('description-modal');
+const modalSaveBtn = document.getElementById('modal-save-btn');
+const modalCancelBtn = document.getElementById('modal-cancel-btn');
+const modalCloseBtn = document.getElementById('modal-close-btn');
 
 let currentUser = null;
 let originalVideoData = new Map();
-let selectedVideoIds = new Set();
+let selectedVideoIds = new Set(); 
 let currentlyEditingVideoId = null;
 
 // The core "Keys" from your Data Governance strategy
 const GOVERNANCE_KEYS = ['Minister', 'Scripture', 'Event Type', 'Topic', 'Location', 'Audience', 'Title', 'Date'];
 
-// --- PARSING LOGIC ---
+// --- METADATA PARSING & ASSEMBLY ---
 const parseVimeoDescription = (fullText) => {
+    if (!fullText) return { summary: '', metadata: {} };
     const parts = fullText.split('---');
     const summary = parts[0].trim();
     const metadata = {};
@@ -27,9 +34,7 @@ const parseVimeoDescription = (fullText) => {
             const [key, ...val] = line.split(':');
             if (key && val.length > 0) {
                 const trimmedKey = key.trim();
-                if (GOVERNANCE_KEYS.includes(trimmedKey)) {
-                    metadata[trimmedKey] = val.join(':').trim();
-                }
+                metadata[trimmedKey] = val.join(':').trim();
             }
         });
     }
@@ -46,7 +51,7 @@ const assembleVimeoDescription = (summary, metadata) => {
     return newDesc.trim();
 };
 
-// --- RENDER TABLE ---
+// --- TABLE RENDERING ---
 const renderTable = (videos) => {
     videoTbody.innerHTML = '';
     originalVideoData.clear();
@@ -55,6 +60,7 @@ const renderTable = (videos) => {
         const videoId = video.uri.split('/').pop();
         const { summary, metadata } = parseVimeoDescription(video.description || '');
         
+        // Store the parsed state
         originalVideoData.set(videoId, { summary, metadata, name: video.name });
 
         const row = document.createElement('tr');
@@ -72,22 +78,40 @@ const renderTable = (videos) => {
         `;
         videoTbody.appendChild(row);
     });
-    document.getElementById('table-container').style.display = 'block';
+    tableContainer.style.display = 'block';
+    saveAllBtn.style.display = 'inline-block';
 };
 
-// --- SAVE LOGIC ---
-const handleSave = async (videoId, row) => {
+// --- INDIVIDUAL SAVE ---
+const handleSave = async (row) => {
+    const videoId = row.dataset.videoId;
+    const saveBtn = row.querySelector('.save-btn');
+    saveBtn.innerText = 'Saving...';
+
     const summary = row.querySelector('.summary-cell').innerHTML;
     const metadata = {};
     GOVERNANCE_KEYS.forEach(key => {
-        const cell = row.querySelector(`.meta-${key.replace(' ', '')}`);
+        const cleanKey = key.replace(/\s+/g, '');
+        const cell = row.querySelector(`.meta-${cleanKey}`);
         if (cell) metadata[key] = cell.innerText.trim();
     });
 
     const finalDescription = assembleVimeoDescription(summary, metadata);
     
-    // Call your existing /api/update-video endpoint here with finalDescription
-    console.log("Saving to Vimeo:", finalDescription);
+    try {
+        const response = await fetch('/api/update-video', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.token.access_token}` },
+            body: JSON.stringify({ videoId, updates: { description: finalDescription } }),
+        });
+        if (response.ok) {
+            saveBtn.innerText = 'Saved!';
+            setTimeout(() => saveBtn.innerText = 'Save', 2000);
+        }
+    } catch (err) {
+        console.error(err);
+        saveBtn.innerText = 'Error';
+    }
 };
 
 // --- BULK UPDATE LOGIC ---
@@ -101,38 +125,93 @@ const handleBulkUpdate = () => {
 
     selectedVideoIds.forEach(id => {
         const row = document.querySelector(`tr[data-video-id="${id}"]`);
+        if (!row) return;
         Object.keys(bulkVals).forEach(key => {
             if (bulkVals[key]) {
-                const cell = row.querySelector(`.meta-${key.replace(' ', '')}`);
+                const cleanKey = key.replace(/\s+/g, '');
+                const cell = row.querySelector(`.meta-${cleanKey}`);
                 if (cell) cell.innerText = bulkVals[key];
             }
         });
     });
-    alert('Local metadata updated. Don\'t forget to Save All Changes!');
+    alert('Local changes applied to selected. Click Save to upload to Vimeo.');
 };
 
-// --- INITIALIZATION & EVENT LISTENERS ---
+// --- CAPTION DOWNLOAD ---
+const handleDownloadCaptions = async () => {
+    if (selectedVideoIds.size === 0) return alert('Select videos first');
+    downloadCaptionsBtn.disabled = true;
+    for (const id of selectedVideoIds) {
+        try {
+            const res = await fetch(`/api/get-captions?videoId=${id}`, {
+                headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
+            });
+            const tracks = await res.json();
+            if (tracks.length > 0) {
+                const fileRes = await fetch(tracks[0].link);
+                const text = await fileRes.text();
+                const blob = new Blob([text], { type: 'text/vtt' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `captions_${id}.vtt`;
+                a.click();
+            }
+        } catch (e) { console.error(e); }
+    }
+    downloadCaptionsBtn.disabled = false;
+};
+
+// --- APP FLOW ---
+const fetchVideosByFolder = async () => {
+    const uri = folderFilter.value;
+    const res = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(uri)}`, {
+        headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
+    });
+    const { data } = await res.json();
+    renderTable(data);
+};
+
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('apply-bulk-edit-btn').addEventListener('click', handleBulkUpdate);
-    
+    folderFilter.addEventListener('change', fetchVideosByFolder);
+    applyBulkEditBtn.addEventListener('click', handleBulkUpdate);
+    downloadCaptionsBtn.addEventListener('click', handleDownloadCaptions);
+
+    // Modal Events
+    modalSaveBtn.addEventListener('click', () => {
+        const row = document.querySelector(`tr[data-video-id="${currentlyEditingVideoId}"]`);
+        row.querySelector('.summary-cell').innerHTML = tinymce.get('tinymce-textarea').getContent();
+        descriptionModal.style.display = 'none';
+        tinymce.get('tinymce-textarea').remove();
+    });
+
     videoTbody.addEventListener('click', (e) => {
         if (e.target.classList.contains('summary-cell')) {
             currentlyEditingVideoId = e.target.closest('tr').dataset.videoId;
             descriptionModal.style.display = 'flex';
-            tinymce.get('tinymce-textarea').setContent(e.target.innerHTML);
+            tinymce.init({
+                selector: '#tinymce-textarea',
+                height: 300,
+                menubar: false,
+                setup: (ed) => ed.on('init', () => ed.setContent(e.target.innerHTML))
+            });
         }
         if (e.target.classList.contains('save-btn')) {
-            const row = e.target.closest('tr');
-            handleSave(row.dataset.videoId, row);
+            handleSave(e.target.closest('tr'));
         }
     });
 
-    document.getElementById('modal-save-btn').addEventListener('click', () => {
-        const content = tinymce.get('tinymce-textarea').getContent();
-        const row = document.querySelector(`tr[data-video-id="${currentlyEditingVideoId}"]`);
-        row.querySelector('.summary-cell').innerHTML = content;
-        descriptionModal.style.display = 'none';
+    videoTbody.addEventListener('change', (e) => {
+        if (e.target.classList.contains('video-checkbox')) {
+            const id = e.target.dataset.videoId;
+            e.target.checked ? selectedVideoIds.add(id) : selectedVideoIds.delete(id);
+            bulkEditBar.style.display = selectedVideoIds.size > 0 ? 'block' : 'none';
+            selectionCounter.innerText = `${selectedVideoIds.size} video(s) selected`;
+        }
     });
 
-    // ... (rest of your existing Netlify login and folder fetching logic)
+    netlifyIdentity.on('login', user => {
+        currentUser = user;
+        appContainer.style.display = 'block';
+        // Add folder fetching logic here
+    });
 });
