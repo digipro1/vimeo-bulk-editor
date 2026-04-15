@@ -75,22 +75,36 @@ thead th { position: sticky; top: 0; z-index: 10; background-color: #f4f6f8; fon
 /* Frozen Combined Media Column */
 .col-Media {
     position: sticky;
-    left: 40px; /* Pushed to the edge of the checkbox */
+    left: 40px;
     z-index: 5;
-    min-width: 280px;
-    max-width: 280px;
+    min-width: 250px;
+    max-width: 250px;
     border-right: 2px solid var(--accent-blue);
 }
 
 /* Intersection Top-Left Corners */
 thead th.col-Checkbox, thead th.col-Media { z-index: 15; background-color: #f4f6f8; }
 
-/* Media Card Content */
-.media-card { display: flex; gap: 12px; align-items: flex-start; }
-.media-thumb { width: 80px; height: 45px; object-fit: cover; border-radius: 4px; background-color: #eee; flex-shrink: 0; }
-.media-details { display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
-.media-details strong { font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--dark-text); }
-.media-actions { display: flex; gap: 10px; align-items: center; }
+/* REVISED: Media Card Content Stacked Layout */
+.media-card { display: flex; flex-direction: column; gap: 8px; }
+.media-card strong { 
+    font-size: 0.9rem; 
+    line-height: 1.3; 
+    color: var(--dark-text); 
+    display: -webkit-box; 
+    -webkit-line-clamp: 2; /* Allows wrapping to 2 lines, then truncates gracefully */
+    -webkit-box-orient: vertical; 
+    overflow: hidden; 
+}
+.media-thumb { 
+    width: 100%; /* Stretches to the width of the column */
+    aspect-ratio: 16 / 9; /* Perfect video thumbnail ratio */
+    object-fit: cover; 
+    border-radius: 6px; 
+    background-color: #eee; 
+    border: 1px solid var(--border-color); 
+}
+.media-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
 .manage-link { color: var(--accent-blue); text-decoration: none; font-weight: 600; font-size: 0.8rem; }
 .manage-link:hover { text-decoration: underline; }
 
@@ -103,7 +117,7 @@ tbody tr:hover td.col-Checkbox, tbody tr:hover td.col-Media { background-color: 
 [contenteditable="true"]:focus { border: 1px solid var(--accent-blue); background-color: #fff; }
 
 /* Plain text editable summary */
-.col-Summary { min-width: 280px; max-width: 350px; white-space: pre-wrap; /* Allows formatting & returns */ word-wrap: break-word; }
+.col-Summary { min-width: 280px; max-width: 350px; white-space: pre-wrap; word-wrap: break-word; }
 
 /* Table Header Filters */
 .th-content { display: flex; justify-content: space-between; align-items: center; gap: 5px; }
