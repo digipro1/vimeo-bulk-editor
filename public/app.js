@@ -303,10 +303,8 @@ const renderTable = (videos) => {
         const { summary, metadata } = parseVimeoDescription(video.description || '');
         originalVideoData.set(videoId, { summary, metadata, name: video.name });
 
-        // NEW: Smarter thumbnail extraction logic
         let thumbUrl = '';
         if (video.pictures && Array.isArray(video.pictures.sizes) && video.pictures.sizes.length > 0) {
-            // Find a size closest to ~200px wide for optimal loading, or fallback to the first available image
             const targetSize = video.pictures.sizes.find(s => s.width >= 200 && s.width <= 640) || video.pictures.sizes[0];
             thumbUrl = targetSize ? targetSize.link : '';
         }
@@ -314,17 +312,16 @@ const renderTable = (videos) => {
         const row = document.createElement('tr');
         row.dataset.videoId = videoId;
         
+        // REVISED HTML: Stacked Media Card Layout
         row.innerHTML = `
             <td class="col-Checkbox"><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
             <td class="col-Media">
                 <div class="media-card">
+                    <strong title="${video.name}">${video.name || '(No Title)'}</strong>
                     ${thumbUrl ? `<img src="${thumbUrl}" class="media-thumb" />` : '<div class="media-thumb"></div>'}
-                    <div class="media-details">
-                        <strong title="${video.name}">${video.name || '(No Title)'}</strong>
-                        <div class="media-actions">
-                            <button class="save-btn">Save</button>
-                            <a href="https://vimeo.com/manage/videos/${videoId}" target="_blank" class="manage-link">Manage</a>
-                        </div>
+                    <div class="media-actions">
+                        <button class="save-btn">Save</button>
+                        <a href="https://vimeo.com/manage/videos/${videoId}" target="_blank" class="manage-link">Manage</a>
                     </div>
                 </div>
             </td>
