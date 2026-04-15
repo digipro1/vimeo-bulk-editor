@@ -303,8 +303,13 @@ const renderTable = (videos) => {
         const { summary, metadata } = parseVimeoDescription(video.description || '');
         originalVideoData.set(videoId, { summary, metadata, name: video.name });
 
-        // Retrieve thumbnail (Vimeo provides an array of sizes, we grab a medium/small one)
-        const thumbUrl = video.pictures?.sizes?.[2]?.link || video.pictures?.sizes?.[0]?.link || '';
+        // NEW: Smarter thumbnail extraction logic
+        let thumbUrl = '';
+        if (video.pictures && Array.isArray(video.pictures.sizes) && video.pictures.sizes.length > 0) {
+            // Find a size closest to ~200px wide for optimal loading, or fallback to the first available image
+            const targetSize = video.pictures.sizes.find(s => s.width >= 200 && s.width <= 640) || video.pictures.sizes[0];
+            thumbUrl = targetSize ? targetSize.link : '';
+        }
 
         const row = document.createElement('tr');
         row.dataset.videoId = videoId;
@@ -343,7 +348,6 @@ const handleSave = async (row) => {
     const saveBtn = row.querySelector('.save-btn');
     saveBtn.innerText = 'Saving...';
     
-    // Now reads straight plain text (innerText) since we removed the HTML modal
     const summary = row.querySelector('.col-Summary').innerText.trim();
     const metadata = {};
     GOVERNANCE_KEYS.forEach(k => {
