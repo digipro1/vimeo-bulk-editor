@@ -19,7 +19,7 @@ let originalVideoData = new Map();
 let selectedVideoIds = new Set(); 
 let currentlyEditingVideoId = null;
 
-// NEW: Store the full folder tree map so we can traverse it later
+// Store the full folder tree map so we can traverse it later
 let allFoldersMap = new Map(); 
 
 // The core Data Governance categories
@@ -205,15 +205,13 @@ const fetchFolders = async (user) => {
             nextPagePath = data.nextPagePath;
         } while (nextPagePath);
 
-        // Map all folders to build the relationships
         allFoldersMap.clear();
         allFolders.forEach(f => allFoldersMap.set(f.uri, { ...f, children: [] }));
 
-        // Identify parent/child folders
         const rootFolders = [];
         allFoldersMap.forEach(f => {
-            // Vimeo stores parent details in metadata connections
-            const parentUri = f.metadata?.connections?.parent?.uri || f.parent_folder?.uri;
+            // FIXED: Using 'parent_folder' instead of 'parent' to properly catch the Vimeo API structure
+            const parentUri = f.metadata?.connections?.parent_folder?.uri || f.parent_folder?.uri;
             if (parentUri && allFoldersMap.has(parentUri)) {
                 allFoldersMap.get(parentUri).children.push(f);
             } else {
@@ -221,14 +219,12 @@ const fetchFolders = async (user) => {
             }
         });
 
-        // Recursively sort folders alphabetically
         const sortFolders = (folders) => {
             folders.sort((a, b) => a.name.localeCompare(b.name));
             folders.forEach(f => sortFolders(f.children));
         };
         sortFolders(rootFolders);
 
-        // Build the dropdown visually representing the tree
         folderFilter.innerHTML = '<option value="" disabled selected>Select a folder...</option>';
         const buildSelectUI = (folders, depth = 0) => {
             const indent = '\u00A0\u00A0\u00A0\u00A0'.repeat(depth);
@@ -254,14 +250,13 @@ const fetchVideosByFolder = async () => {
     searchInput.disabled = true;
     toggleColumnsBtn.disabled = true;
 
-    // Build a list of the chosen folder AND every nested subfolder
     const urisToFetch = [selectedUri];
     const getDescendants = (uri) => {
         const folder = allFoldersMap.get(uri);
         if (folder && folder.children) {
             folder.children.forEach(c => {
                 urisToFetch.push(c.uri);
-                getDescendants(c.uri); // recurse deeper
+                getDescendants(c.uri); 
             });
         }
     };
@@ -270,7 +265,6 @@ const fetchVideosByFolder = async () => {
     videoTbody.innerHTML = `<tr><td colspan="16">Loading videos from ${urisToFetch.length} folder(s)...</td></tr>`;
     
     try {
-        // Fetch from all folders concurrently to save time
         const fetchPromises = urisToFetch.map(uri => 
             fetch(`/api/vimeo?folderUri=${encodeURIComponent(uri)}`, {
                 headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
@@ -289,7 +283,6 @@ const fetchVideosByFolder = async () => {
             }
         });
 
-        // Strip out duplicates (in case Vimeo returned a video twice)
         const uniqueVideosMap = new Map();
         allVideos.forEach(v => uniqueVideosMap.set(v.uri, v));
         const uniqueVideos = Array.from(uniqueVideosMap.values());
