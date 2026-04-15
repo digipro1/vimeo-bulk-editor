@@ -20,6 +20,7 @@
                     <select id="folder-filter"><option value="" disabled selected>Loading folders...</option></select>
                 </div>
                 <input type="text" id="search-input" placeholder="Search videos...">
+                <button id="clear-filters-btn" class="btn-secondary" style="display: none;">Clear Filters</button>
             </div>
             
             <div class="controls-right">
@@ -58,6 +59,16 @@
                         <option value="Teen">Teen</option>
                     </select>
                 </div>
+                <div class="field-group">
+                    <label>Privacy</label>
+                    <select id="bulk-privacy">
+                        <option value="">-- No Change --</option>
+                        <option value="anybody">Public (Anybody)</option>
+                        <option value="unlisted">Unlisted</option>
+                        <option value="password">Password</option>
+                        <option value="nobody">Private (Nobody)</option>
+                    </select>
+                </div>
             </div>
             <div class="bulk-actions">
                 <button id="apply-bulk-edit-btn">Apply Metadata</button>
@@ -70,20 +81,20 @@
                 <thead>
                     <tr>
                         <th class="col-Checkbox"><input type="checkbox" id="select-all-checkbox"></th>
-                        <th class="col-Media">Video Details</th>
-                        <th class="col-Summary">Summary</th>
-                        <th class="col-Title"><div class="th-content">Title <button class="filter-btn" data-key="Title">▼</button></div></th>
-                        <th class="col-Series"><div class="th-content">Series <button class="filter-btn" data-key="Series">▼</button></div></th>
-                        <th class="col-Date"><div class="th-content">Date <button class="filter-btn" data-key="Date">▼</button></div></th>
-                        <th class="col-Minister"><div class="th-content">Minister <button class="filter-btn" data-key="Minister">▼</button></div></th>
-                        <th class="col-Scripture"><div class="th-content">Scripture <button class="filter-btn" data-key="Scripture">▼</button></div></th>
-                        <th class="col-SupportingScripture"><div class="th-content">Supporting Scripture <button class="filter-btn" data-key="Supporting Scripture">▼</button></div></th>
-                        <th class="col-EventType"><div class="th-content">Event Type <button class="filter-btn" data-key="Event Type">▼</button></div></th>
-                        <th class="col-Topic"><div class="th-content">Topic <button class="filter-btn" data-key="Topic">▼</button></div></th>
-                        <th class="col-Features"><div class="th-content">Features <button class="filter-btn" data-key="Features">▼</button></div></th>
-                        <th class="col-Holiday"><div class="th-content">Holiday <button class="filter-btn" data-key="Holiday">▼</button></div></th>
-                        <th class="col-Location"><div class="th-content">Location <button class="filter-btn" data-key="Location">▼</button></div></th>
-                        <th class="col-Audience"><div class="th-content">Audience <button class="filter-btn" data-key="Audience">▼</button></div></th>
+                        <th class="col-Media"><span class="sort-label" data-sort="NativeTitle">Video Details</span></th>
+                        <th class="col-Summary"><span class="sort-label" data-sort="Summary">Summary</span></th>
+                        <th class="col-Title"><div class="th-content"><span class="sort-label" data-sort="Title">Title</span> <button class="filter-btn" data-key="Title">▼</button></div></th>
+                        <th class="col-Series"><div class="th-content"><span class="sort-label" data-sort="Series">Series</span> <button class="filter-btn" data-key="Series">▼</button></div></th>
+                        <th class="col-Date"><div class="th-content"><span class="sort-label" data-sort="Date">Date</span> <button class="filter-btn" data-key="Date">▼</button></div></th>
+                        <th class="col-Minister"><div class="th-content"><span class="sort-label" data-sort="Minister">Minister</span> <button class="filter-btn" data-key="Minister">▼</button></div></th>
+                        <th class="col-Scripture"><div class="th-content"><span class="sort-label" data-sort="Scripture">Scripture</span> <button class="filter-btn" data-key="Scripture">▼</button></div></th>
+                        <th class="col-SupportingScripture"><div class="th-content"><span class="sort-label" data-sort="Supporting Scripture">Supporting Scripture</span> <button class="filter-btn" data-key="Supporting Scripture">▼</button></div></th>
+                        <th class="col-EventType"><div class="th-content"><span class="sort-label" data-sort="Event Type">Event Type</span> <button class="filter-btn" data-key="Event Type">▼</button></div></th>
+                        <th class="col-Topic"><div class="th-content"><span class="sort-label" data-sort="Topic">Topic</span> <button class="filter-btn" data-key="Topic">▼</button></div></th>
+                        <th class="col-Features"><div class="th-content"><span class="sort-label" data-sort="Features">Features</span> <button class="filter-btn" data-key="Features">▼</button></div></th>
+                        <th class="col-Holiday"><div class="th-content"><span class="sort-label" data-sort="Holiday">Holiday</span> <button class="filter-btn" data-key="Holiday">▼</button></div></th>
+                        <th class="col-Location"><div class="th-content"><span class="sort-label" data-sort="Location">Location</span> <button class="filter-btn" data-key="Location">▼</button></div></th>
+                        <th class="col-Audience"><div class="th-content"><span class="sort-label" data-sort="Audience">Audience</span> <button class="filter-btn" data-key="Audience">▼</button></div></th>
                     </tr>
                 </thead>
                 <tbody id="video-list"></tbody>
