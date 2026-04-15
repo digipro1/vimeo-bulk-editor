@@ -45,78 +45,44 @@ button { font-family: 'Montserrat', sans-serif; font-weight: 600; cursor: pointe
 #save-all-btn:hover, .btn-primary:hover, #apply-bulk-edit-btn:hover { background-color: #218838; }
 #download-captions-btn { padding: 0.75rem 1.5rem; border: 1px solid var(--accent-blue); background-color: transparent; color: var(--accent-blue); }
 #download-captions-btn:hover { background-color: var(--accent-blue); color: white; }
-.btn-secondary { padding: 0.75rem 1.5rem; border: 1px solid #6c757d; background-color: transparent; color: #6c757d; }
-.btn-secondary:hover { background-color: #f8f9fa; }
+.btn-secondary { padding: 0.5rem 1rem; border: 1px solid #6c757d; background-color: transparent; color: #6c757d; }
+.btn-secondary:hover { background-color: #f8f9fa; color: #333;}
 .save-btn { background-color: var(--accent-blue); color: white; border: none; padding: 0.4rem 0.8rem; font-size: 0.85rem; }
 .save-btn:hover { background-color: var(--accent-hover); }
 button:disabled { background-color: #B0BEC5 !important; border-color: #B0BEC5 !important; color: white !important; cursor: not-allowed; }
 
 /* --- Dynamic Table & Sticky Scroll Layout --- */
-#table-container {
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    flex-grow: 1; 
-    overflow-x: auto; 
-    overflow-y: auto; 
-    max-width: 100%;
-    position: relative;
-}
-
+#table-container { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex-grow: 1; overflow-x: auto; overflow-y: auto; max-width: 100%; position: relative; }
 table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.85rem; }
 th, td { padding: 12px; border-bottom: 1px solid var(--border-color); text-align: left; vertical-align: top; background-color: white; }
 
-/* Frozen Header Top Row */
+/* Frozen Headers & Columns */
 thead th { position: sticky; top: 0; z-index: 10; background-color: #f4f6f8; font-weight: 600; color: #555; text-transform: uppercase; font-size: 0.75rem; white-space: nowrap; border-bottom: 2px solid var(--border-color); }
-
-/* Frozen Checkbox Column */
 .col-Checkbox { position: sticky; left: 0; z-index: 5; min-width: 40px; max-width: 40px; border-right: 1px solid #EAEAEA; vertical-align: middle;}
-
-/* Frozen Combined Media Column */
-.col-Media {
-    position: sticky;
-    left: 40px;
-    z-index: 5;
-    min-width: 250px;
-    max-width: 250px;
-    border-right: 2px solid var(--accent-blue);
-}
-
-/* Intersection Top-Left Corners */
+.col-Media { position: sticky; left: 40px; z-index: 5; min-width: 250px; max-width: 250px; border-right: 2px solid var(--accent-blue); }
 thead th.col-Checkbox, thead th.col-Media { z-index: 15; background-color: #f4f6f8; }
 
-/* REVISED: Media Card Content Stacked Layout */
+/* Sorting Styles */
+.sort-label { cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.sort-label:hover { color: var(--accent-blue); }
+.sort-label.sort-asc::after { content: ' ↑'; color: var(--accent-blue); }
+.sort-label.sort-desc::after { content: ' ↓'; color: var(--accent-blue); }
+
+/* Media Card Content */
 .media-card { display: flex; flex-direction: column; gap: 8px; }
-.media-card strong { 
-    font-size: 0.9rem; 
-    line-height: 1.3; 
-    color: var(--dark-text); 
-    display: -webkit-box; 
-    -webkit-line-clamp: 2; /* Allows wrapping to 2 lines, then truncates gracefully */
-    -webkit-box-orient: vertical; 
-    overflow: hidden; 
-}
-.media-thumb { 
-    width: 100%; /* Stretches to the width of the column */
-    aspect-ratio: 16 / 9; /* Perfect video thumbnail ratio */
-    object-fit: cover; 
-    border-radius: 6px; 
-    background-color: #eee; 
-    border: 1px solid var(--border-color); 
-}
+.media-card strong { font-size: 0.9rem; line-height: 1.3; color: var(--dark-text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.media-thumb { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; background-color: #eee; border: 1px solid var(--border-color); }
 .media-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+.privacy-select { padding: 0.3rem; font-size: 0.75rem; width: auto; max-width: 100px; }
 .manage-link { color: var(--accent-blue); text-decoration: none; font-weight: 600; font-size: 0.8rem; }
 .manage-link:hover { text-decoration: underline; }
 
-/* Hover States for Frozen Cells */
 tbody tr:hover td { background-color: #fafafa; }
 tbody tr:hover td.col-Checkbox, tbody tr:hover td.col-Media { background-color: #fafafa; }
 
 /* Standard Column Styling */
 [contenteditable="true"] { background-color: var(--editable-bg); border: 1px solid transparent; transition: border 0.2s; min-width: 130px; outline: none; }
 [contenteditable="true"]:focus { border: 1px solid var(--accent-blue); background-color: #fff; }
-
-/* Plain text editable summary */
 .col-Summary { min-width: 280px; max-width: 350px; white-space: pre-wrap; word-wrap: break-word; }
 
 /* Table Header Filters */
