@@ -19,24 +19,19 @@ let originalVideoData = new Map();
 let selectedVideoIds = new Set(); 
 let currentlyEditingVideoId = null;
 
-// Store the full folder tree map so we can traverse it later
 let allFoldersMap = new Map(); 
 
-// The core Data Governance categories
 const GOVERNANCE_KEYS = [
     'Title', 'Series', 'Date', 'Minister', 'Scripture', 
     'Supporting Scripture', 'Event Type', 'Topic', 
     'Features', 'Holiday', 'Location', 'Audience'
 ];
 
-// Identify which ones are arrays (comma separated)
 const MULTI_VALUE_KEYS = ['Features', 'Holiday', 'Topic', 'Supporting Scripture'];
-
-// The active filters chosen by the user in the column headers
 const activeFilters = {}; 
 let currentFilterPanelKey = null;
 
-// --- DATA EXTRACTION (Phase 1) ---
+// --- DATA EXTRACTION ---
 const getBookName = (scriptureStr) => {
     if (!scriptureStr) return '';
     const match = scriptureStr.match(/^(\d\s+)?[a-zA-Z\s]+/);
@@ -80,7 +75,7 @@ const assembleVimeoDescription = (summary, metadata) => {
     return newDesc.trim();
 };
 
-// --- FILTER EXECUTION (Phase 3) ---
+// --- FILTERS ---
 const applyTableFilters = () => {
     const term = searchInput.value.toLowerCase();
     const rows = videoTbody.querySelectorAll('tr');
@@ -108,7 +103,6 @@ const applyTableFilters = () => {
     updateSelectAllUI();
 };
 
-// --- FILTER POPULATION (Phase 2) ---
 const openFilterPanel = (key, btnElement) => {
     currentFilterPanelKey = key;
     const panel = document.getElementById('table-filter-panel');
@@ -170,7 +164,6 @@ document.getElementById('filter-panel-clear').addEventListener('click', () => {
     applyTableFilters();
 });
 
-// --- COLUMN VISIBILITY ---
 const initColumnToggles = () => {
     const cols = ['Summary', ...GOVERNANCE_KEYS];
     columnTogglePanel.innerHTML = '';
@@ -192,7 +185,7 @@ const initColumnToggles = () => {
     });
 };
 
-// --- FOLDER HIERARCHY & API FETCHING ---
+// --- DATA FETCHING ---
 const fetchFolders = async (user) => {
     try {
         let allFolders = []; 
@@ -210,7 +203,6 @@ const fetchFolders = async (user) => {
 
         const rootFolders = [];
         allFoldersMap.forEach(f => {
-            // FIXED: Using 'parent_folder' instead of 'parent' to properly catch the Vimeo API structure
             const parentUri = f.metadata?.connections?.parent_folder?.uri || f.parent_folder?.uri;
             if (parentUri && allFoldersMap.has(parentUri)) {
                 allFoldersMap.get(parentUri).children.push(f);
@@ -262,7 +254,7 @@ const fetchVideosByFolder = async () => {
     };
     getDescendants(selectedUri);
 
-    videoTbody.innerHTML = `<tr><td colspan="16">Loading videos from ${urisToFetch.length} folder(s)...</td></tr>`;
+    videoTbody.innerHTML = `<tr><td colspan="17">Loading videos from ${urisToFetch.length} folder(s)...</td></tr>`;
     
     try {
         const fetchPromises = urisToFetch.map(uri => 
@@ -290,12 +282,12 @@ const fetchVideosByFolder = async () => {
         if (uniqueVideos.length > 0) {
             renderTable(uniqueVideos);
         } else {
-            videoTbody.innerHTML = '<tr><td colspan="16">No videos found in this folder or its subfolders.</td></tr>';
+            videoTbody.innerHTML = '<tr><td colspan="17">No videos found in this folder or its subfolders.</td></tr>';
             saveAllBtn.style.display = 'none';
         }
     } catch (error) {
         console.error(error);
-        videoTbody.innerHTML = '<tr><td colspan="16" style="color:red;">Error loading videos. Check the developer console.</td></tr>';
+        videoTbody.innerHTML = '<tr><td colspan="17" style="color:red;">Error loading videos. Check the developer console.</td></tr>';
     }
     
     searchInput.disabled = false;
@@ -317,6 +309,7 @@ const renderTable = (videos) => {
         row.dataset.videoId = videoId;
         row.innerHTML = `
             <td class="col-Checkbox"><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
+            <td class="col-NativeTitle" title="${video.name}">${video.name || '(No Title)'}</td>
             <td class="col-Summary summary-cell" style="cursor:pointer; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${summary || '(Edit Summary)'}</td>
             ${GOVERNANCE_KEYS.map(k => `<td contenteditable="true" class="col-${k.replace(/\s+/g, '')} meta-${k.replace(/\s+/g, '')}">${metadata[k] || ''}</td>`).join('')}
             <td class="col-Manage"><a href="https://vimeo.com/manage/videos/${videoId}" target="_blank" class="manage-link">Manage</a></td>
@@ -473,7 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('selection-counter').innerText = `${selectedVideoIds.size} video(s) selected`;
     });
 
-    netlifyIdentity.on('login', user => { currentUser = user; appContainer.style.display = 'block'; initColumnToggles(); fetchFolders(user); });
+    netlifyIdentity.on('login', user => { currentUser = user; appContainer.style.display = 'flex'; initColumnToggles(); fetchFolders(user); });
     netlifyIdentity.on('logout', () => location.reload());
-    if (netlifyIdentity.currentUser()) { currentUser = netlifyIdentity.currentUser(); appContainer.style.display = 'block'; initColumnToggles(); fetchFolders(currentUser); }
+    if (netlifyIdentity.currentUser()) { currentUser = netlifyIdentity.currentUser(); appContainer.style.display = 'flex'; initColumnToggles(); fetchFolders(currentUser); }
 });
