@@ -19,6 +19,9 @@ let originalVideoData = new Map();
 let selectedVideoIds = new Set(); 
 let currentlyEditingVideoId = null;
 
+// NEW: Store the full folder tree map so we can traverse it later
+let allFoldersMap = new Map(); 
+
 // The core Data Governance categories
 const GOVERNANCE_KEYS = [
     'Title', 'Series', 'Date', 'Minister', 'Scripture', 
@@ -34,14 +37,12 @@ const activeFilters = {};
 let currentFilterPanelKey = null;
 
 // --- DATA EXTRACTION (Phase 1) ---
-// Gets just the book from a scripture (e.g., "1 John 4:8" -> "1 John")
 const getBookName = (scriptureStr) => {
     if (!scriptureStr) return '';
     const match = scriptureStr.match(/^(\d\s+)?[a-zA-Z\s]+/);
     return match ? match[0].trim() : scriptureStr.trim();
 };
 
-// Universal extractor: returns an Array of values for a given key, properly cleaned
 const extractValues = (key, rawValue) => {
     if (!rawValue) return [];
     if (MULTI_VALUE_KEYS.includes(key)) {
@@ -88,16 +89,13 @@ const applyTableFilters = () => {
         const videoId = row.dataset.videoId;
         const meta = originalVideoData.get(videoId).metadata;
 
-        // 1. Text Search Check
         let passes = row.innerText.toLowerCase().includes(term);
 
-        // 2. Checkbox Logic (AND between categories, OR within)
         if (passes) {
             for (const key of GOVERNANCE_KEYS) {
                 const sel = activeFilters[key];
-                if (!sel || sel.length === 0) continue; // Condition A: No filter set
+                if (!sel || sel.length === 0) continue;
 
-                // Condition B: Extract video values and check against selections using .some()
                 const videoValues = extractValues(key, meta[key]);
                 if (!videoValues.some(item => sel.includes(item))) {
                     passes = false; 
@@ -119,7 +117,6 @@ const openFilterPanel = (key, btnElement) => {
     document.getElementById('filter-panel-title').innerText = `Filter ${key}`;
     optionsContainer.innerHTML = '';
 
-    // Loop data to build Unique Set
     const uniqueValues = new Set();
     originalVideoData.forEach(video => {
         const values = extractValues(key, video.metadata[key]);
@@ -144,14 +141,12 @@ const openFilterPanel = (key, btnElement) => {
         });
     }
 
-    // Position panel under the button
     const rect = btnElement.getBoundingClientRect();
     panel.style.left = `${rect.left + window.scrollX}px`;
     panel.style.top = `${rect.bottom + window.scrollY + 5}px`;
     panel.style.display = 'flex';
 };
 
-// Panel Apply Button
 document.getElementById('filter-panel-apply').addEventListener('click', () => {
     const checked = document.querySelectorAll('#filter-panel-options input:checked');
     const selected = Array.from(checked).map(c => c.value);
@@ -168,7 +163,6 @@ document.getElementById('filter-panel-apply').addEventListener('click', () => {
     applyTableFilters();
 });
 
-// Panel Clear Button
 document.getElementById('filter-panel-clear').addEventListener('click', () => {
     delete activeFilters[currentFilterPanelKey];
     document.querySelector(`.filter-btn[data-key="${currentFilterPanelKey}"]`).classList.remove('active');
@@ -198,10 +192,11 @@ const initColumnToggles = () => {
     });
 };
 
-// --- API & RENDERING ---
+// --- FOLDER HIERARCHY & API FETCHING ---
 const fetchFolders = async (user) => {
     try {
-        let allFolders = []; let nextPagePath = null;
+        let allFolders = []; 
+        let nextPagePath = null;
         do {
             const res = await fetch(nextPagePath ? `/api/get-folders?page=${encodeURIComponent(nextPagePath)}` : '/api/get-folders', 
                 { headers: { Authorization: `Bearer ${user.token.access_token}` } });
@@ -210,38 +205,113 @@ const fetchFolders = async (user) => {
             nextPagePath = data.nextPagePath;
         } while (nextPagePath);
 
-        folderFilter.innerHTML = '<option value="" disabled selected>Select a folder...</option>';
-        allFolders.sort((a, b) => a.name.localeCompare(b.name)).forEach(f => {
-            folderFilter.innerHTML += `<option value="${f.uri}">${f.name}</option>`;
+        // Map all folders to build the relationships
+        allFoldersMap.clear();
+        allFolders.forEach(f => allFoldersMap.set(f.uri, { ...f, children: [] }));
+
+        // Identify parent/child folders
+        const rootFolders = [];
+        allFoldersMap.forEach(f => {
+            // Vimeo stores parent details in metadata connections
+            const parentUri = f.metadata?.connections?.parent?.uri || f.parent_folder?.uri;
+            if (parentUri && allFoldersMap.has(parentUri)) {
+                allFoldersMap.get(parentUri).children.push(f);
+            } else {
+                rootFolders.push(f);
+            }
         });
-    } catch (e) { console.error(e); }
+
+        // Recursively sort folders alphabetically
+        const sortFolders = (folders) => {
+            folders.sort((a, b) => a.name.localeCompare(b.name));
+            folders.forEach(f => sortFolders(f.children));
+        };
+        sortFolders(rootFolders);
+
+        // Build the dropdown visually representing the tree
+        folderFilter.innerHTML = '<option value="" disabled selected>Select a folder...</option>';
+        const buildSelectUI = (folders, depth = 0) => {
+            const indent = '\u00A0\u00A0\u00A0\u00A0'.repeat(depth);
+            const prefix = depth > 0 ? '└─ ' : '';
+            folders.forEach(f => {
+                const option = document.createElement('option');
+                option.value = f.uri;
+                option.textContent = indent + prefix + f.name;
+                folderFilter.appendChild(option);
+                buildSelectUI(f.children, depth + 1);
+            });
+        };
+        buildSelectUI(rootFolders);
+
+    } catch (e) { console.error('Error fetching folders:', e); }
 };
 
 const fetchVideosByFolder = async () => {
-    if (!folderFilter.value) return;
+    const selectedUri = folderFilter.value;
+    if (!selectedUri) return;
+    
     tableContainer.style.display = 'block';
-    videoTbody.innerHTML = '<tr><td colspan="16">Loading videos...</td></tr>';
+    searchInput.disabled = true;
+    toggleColumnsBtn.disabled = true;
+
+    // Build a list of the chosen folder AND every nested subfolder
+    const urisToFetch = [selectedUri];
+    const getDescendants = (uri) => {
+        const folder = allFoldersMap.get(uri);
+        if (folder && folder.children) {
+            folder.children.forEach(c => {
+                urisToFetch.push(c.uri);
+                getDescendants(c.uri); // recurse deeper
+            });
+        }
+    };
+    getDescendants(selectedUri);
+
+    videoTbody.innerHTML = `<tr><td colspan="16">Loading videos from ${urisToFetch.length} folder(s)...</td></tr>`;
     
     try {
-        const res = await fetch(`/api/vimeo?folderUri=${encodeURIComponent(folderFilter.value)}`, {
-            headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
-        });
-        const { data } = await res.json();
+        // Fetch from all folders concurrently to save time
+        const fetchPromises = urisToFetch.map(uri => 
+            fetch(`/api/vimeo?folderUri=${encodeURIComponent(uri)}`, {
+                headers: { Authorization: `Bearer ${currentUser.token.access_token}` }
+            }).then(res => {
+                if (!res.ok) throw new Error('API Error');
+                return res.json();
+            })
+        );
+
+        const results = await Promise.all(fetchPromises);
         
-        if (data && data.length > 0) {
-            renderTable(data);
+        let allVideos = [];
+        results.forEach(res => {
+            if (res.data && res.data.length > 0) {
+                allVideos = allVideos.concat(res.data);
+            }
+        });
+
+        // Strip out duplicates (in case Vimeo returned a video twice)
+        const uniqueVideosMap = new Map();
+        allVideos.forEach(v => uniqueVideosMap.set(v.uri, v));
+        const uniqueVideos = Array.from(uniqueVideosMap.values());
+        
+        if (uniqueVideos.length > 0) {
+            renderTable(uniqueVideos);
         } else {
-            videoTbody.innerHTML = '<tr><td colspan="16">No videos found in this folder.</td></tr>';
+            videoTbody.innerHTML = '<tr><td colspan="16">No videos found in this folder or its subfolders.</td></tr>';
             saveAllBtn.style.display = 'none';
         }
     } catch (error) {
-        videoTbody.innerHTML = '<tr><td colspan="16" style="color:red;">Error loading videos.</td></tr>';
+        console.error(error);
+        videoTbody.innerHTML = '<tr><td colspan="16" style="color:red;">Error loading videos. Check the developer console.</td></tr>';
     }
+    
+    searchInput.disabled = false;
+    toggleColumnsBtn.disabled = false;
 };
 
+// --- TABLE RENDERING ---
 const renderTable = (videos) => {
     videoTbody.innerHTML = ''; originalVideoData.clear();
-    // Clear old filters
     for (let key in activeFilters) delete activeFilters[key];
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
 
@@ -262,7 +332,7 @@ const renderTable = (videos) => {
         videoTbody.appendChild(row);
     });
     saveAllBtn.style.display = 'inline-block';
-    applyTableFilters(); // Run filter once on load to establish state
+    applyTableFilters(); 
 };
 
 // --- BULK & SAVE LOGIC ---
@@ -321,7 +391,6 @@ const handleBulkUpdate = () => {
         });
     });
     
-    // Clear inputs after applying
     document.getElementById('bulk-event-type').value = '';
     document.getElementById('bulk-series').value = '';
     document.getElementById('bulk-minister').value = '';
@@ -362,12 +431,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('save-all-btn').addEventListener('click', handleSaveAll);
     downloadCaptionsBtn.addEventListener('click', handleDownloadCaptions);
 
-    // Setup Header Filter Buttons
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', (e) => openFilterPanel(e.target.dataset.key, e.target));
     });
 
-    // Close panels when clicking outside
     document.addEventListener('mousedown', (e) => {
         const fp = document.getElementById('table-filter-panel');
         const cp = document.getElementById('column-toggle-panel');
@@ -375,7 +442,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cp && cp.style.display !== 'none' && !cp.contains(e.target) && e.target.id !== 'toggle-columns-btn') cp.style.display = 'none';
     });
 
-    // Modals and Table Clicks
     videoTbody.addEventListener('click', (e) => {
         if (e.target.classList.contains('summary-cell')) {
             currentlyEditingVideoId = e.target.closest('tr').dataset.videoId;
@@ -394,7 +460,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('description-modal').style.display = 'none'; if (tinymce.get('tinymce-textarea')) tinymce.get('tinymce-textarea').remove();
     });
 
-    // Checkbox logic
     videoTbody.addEventListener('change', (e) => {
         if (e.target.classList.contains('video-checkbox')) {
             e.target.checked ? selectedVideoIds.add(e.target.dataset.videoId) : selectedVideoIds.delete(e.target.dataset.videoId);
@@ -415,7 +480,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('selection-counter').innerText = `${selectedVideoIds.size} video(s) selected`;
     });
 
-    // Auth flows
     netlifyIdentity.on('login', user => { currentUser = user; appContainer.style.display = 'block'; initColumnToggles(); fetchFolders(user); });
     netlifyIdentity.on('logout', () => location.reload());
     if (netlifyIdentity.currentUser()) { currentUser = netlifyIdentity.currentUser(); appContainer.style.display = 'block'; initColumnToggles(); fetchFolders(currentUser); }
