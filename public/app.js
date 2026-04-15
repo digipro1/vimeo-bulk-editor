@@ -12,12 +12,10 @@ const selectionCounter = document.getElementById('selection-counter');
 const selectAllCheckbox = document.getElementById('select-all-checkbox');
 const applyBulkEditBtn = document.getElementById('apply-bulk-edit-btn');
 const downloadCaptionsBtn = document.getElementById('download-captions-btn');
-const descriptionModal = document.getElementById('description-modal');
 
 let currentUser = null;
 let originalVideoData = new Map();
 let selectedVideoIds = new Set(); 
-let currentlyEditingVideoId = null;
 
 let allFoldersMap = new Map(); 
 
@@ -254,7 +252,7 @@ const fetchVideosByFolder = async () => {
     };
     getDescendants(selectedUri);
 
-    videoTbody.innerHTML = `<tr><td colspan="17">Loading videos from ${urisToFetch.length} folder(s)...</td></tr>`;
+    videoTbody.innerHTML = `<tr><td colspan="15">Loading videos from ${urisToFetch.length} folder(s)...</td></tr>`;
     
     try {
         const fetchPromises = urisToFetch.map(uri => 
@@ -282,12 +280,12 @@ const fetchVideosByFolder = async () => {
         if (uniqueVideos.length > 0) {
             renderTable(uniqueVideos);
         } else {
-            videoTbody.innerHTML = '<tr><td colspan="17">No videos found in this folder or its subfolders.</td></tr>';
+            videoTbody.innerHTML = '<tr><td colspan="15">No videos found in this folder or its subfolders.</td></tr>';
             saveAllBtn.style.display = 'none';
         }
     } catch (error) {
         console.error(error);
-        videoTbody.innerHTML = '<tr><td colspan="17" style="color:red;">Error loading videos. Check the developer console.</td></tr>';
+        videoTbody.innerHTML = '<tr><td colspan="15" style="color:red;">Error loading videos. Check the developer console.</td></tr>';
     }
     
     searchInput.disabled = false;
@@ -305,15 +303,28 @@ const renderTable = (videos) => {
         const { summary, metadata } = parseVimeoDescription(video.description || '');
         originalVideoData.set(videoId, { summary, metadata, name: video.name });
 
+        // Retrieve thumbnail (Vimeo provides an array of sizes, we grab a medium/small one)
+        const thumbUrl = video.pictures?.sizes?.[2]?.link || video.pictures?.sizes?.[0]?.link || '';
+
         const row = document.createElement('tr');
         row.dataset.videoId = videoId;
+        
         row.innerHTML = `
             <td class="col-Checkbox"><input type="checkbox" class="video-checkbox" data-video-id="${videoId}"></td>
-            <td class="col-NativeTitle" title="${video.name}">${video.name || '(No Title)'}</td>
-            <td class="col-Summary summary-cell" style="cursor:pointer; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${summary || '(Edit Summary)'}</td>
+            <td class="col-Media">
+                <div class="media-card">
+                    ${thumbUrl ? `<img src="${thumbUrl}" class="media-thumb" />` : '<div class="media-thumb"></div>'}
+                    <div class="media-details">
+                        <strong title="${video.name}">${video.name || '(No Title)'}</strong>
+                        <div class="media-actions">
+                            <button class="save-btn">Save</button>
+                            <a href="https://vimeo.com/manage/videos/${videoId}" target="_blank" class="manage-link">Manage</a>
+                        </div>
+                    </div>
+                </div>
+            </td>
+            <td contenteditable="true" class="col-Summary">${summary || ''}</td>
             ${GOVERNANCE_KEYS.map(k => `<td contenteditable="true" class="col-${k.replace(/\s+/g, '')} meta-${k.replace(/\s+/g, '')}">${metadata[k] || ''}</td>`).join('')}
-            <td class="col-Manage"><a href="https://vimeo.com/manage/videos/${videoId}" target="_blank" class="manage-link">Manage</a></td>
-            <td class="col-Action"><button class="save-btn">Save</button></td>
         `;
         videoTbody.appendChild(row);
     });
@@ -332,7 +343,8 @@ const handleSave = async (row) => {
     const saveBtn = row.querySelector('.save-btn');
     saveBtn.innerText = 'Saving...';
     
-    const summary = row.querySelector('.summary-cell').innerHTML;
+    // Now reads straight plain text (innerText) since we removed the HTML modal
+    const summary = row.querySelector('.col-Summary').innerText.trim();
     const metadata = {};
     GOVERNANCE_KEYS.forEach(k => {
         const cell = row.querySelector(`.meta-${k.replace(/\s+/g, '')}`);
@@ -429,21 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     videoTbody.addEventListener('click', (e) => {
-        if (e.target.classList.contains('summary-cell')) {
-            currentlyEditingVideoId = e.target.closest('tr').dataset.videoId;
-            document.getElementById('description-modal').style.display = 'flex';
-            tinymce.init({ selector: '#tinymce-textarea', height: 300, menubar: false, setup: ed => ed.on('init', () => ed.setContent(e.target.innerHTML)) });
-        }
         if (e.target.classList.contains('save-btn')) handleSave(e.target.closest('tr'));
-    });
-
-    document.getElementById('modal-save-btn').addEventListener('click', () => {
-        document.querySelector(`tr[data-video-id="${currentlyEditingVideoId}"] .summary-cell`).innerHTML = tinymce.get('tinymce-textarea').getContent();
-        document.getElementById('description-modal').style.display = 'none'; tinymce.get('tinymce-textarea').remove();
-    });
-
-    document.getElementById('modal-cancel-btn').addEventListener('click', () => {
-        document.getElementById('description-modal').style.display = 'none'; if (tinymce.get('tinymce-textarea')) tinymce.get('tinymce-textarea').remove();
     });
 
     videoTbody.addEventListener('change', (e) => {
