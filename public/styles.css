@@ -10,10 +10,9 @@
     --border-color: #EAEAEA;
     --bg-color: #F8F9FA;
     --editable-bg: #FFFDE7;
-    --modal-overlay: rgba(0, 0, 0, 0.6);
 }
 
-body { font-family: 'Montserrat', sans-serif; margin: 0; background-color: var(--bg-color); color: var(--dark-text); overflow: hidden; /* Prevent double scrollbars on the body */ }
+body { font-family: 'Montserrat', sans-serif; margin: 0; background-color: var(--bg-color); color: var(--dark-text); overflow: hidden; }
 header { background-color: var(--dark-bg); color: var(--light-text); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid var(--accent-blue); }
 header h1 { margin: 0; font-size: 1.5rem; font-weight: 700; }
 [data-netlify-identity-button] a, [data-netlify-identity-button] button { color: var(--light-text); text-decoration: none; background: none; border: none; font-family: 'Montserrat', sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; padding: 0.5rem; }
@@ -21,9 +20,9 @@ header h1 { margin: 0; font-size: 1.5rem; font-weight: 700; }
 [data-netlify-identity-button] a + a { display: none; }
 
 /* --- Main Layout --- */
-main { padding: 1.5rem; max-width: 100%; margin: 0 auto; box-sizing: border-box; display: flex; flex-direction: column; height: calc(100vh - 70px); /* Fill the screen minus the header */ }
+main { padding: 1.5rem; max-width: 100%; margin: 0 auto; box-sizing: border-box; display: flex; flex-direction: column; height: calc(100vh - 70px); }
 
-/* --- Controls (Search & Columns) --- */
+/* --- Controls --- */
 #controls-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; background: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 1rem; flex-shrink: 0; }
 .controls-left, .controls-right { display: flex; align-items: center; gap: 1rem; }
 #search-input { min-width: 250px; }
@@ -57,85 +56,54 @@ button:disabled { background-color: #B0BEC5 !important; border-color: #B0BEC5 !i
     background: white;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    flex-grow: 1; /* Instructs container to fill remaining screen space */
+    flex-grow: 1; 
     overflow-x: auto; 
-    overflow-y: auto; /* Enables vertical scrolling inside the container */
+    overflow-y: auto; 
     max-width: 100%;
     position: relative;
 }
 
-table {
-    width: 100%;
-    border-collapse: separate; /* Required for sticky borders */
-    border-spacing: 0;
-    font-size: 0.85rem;
-}
-
-th, td {
-    padding: 12px;
-    border-bottom: 1px solid var(--border-color);
-    text-align: left;
-    vertical-align: middle;
-    background-color: white; /* Base color to hide scrolling layers */
-}
+table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.85rem; }
+th, td { padding: 12px; border-bottom: 1px solid var(--border-color); text-align: left; vertical-align: top; background-color: white; }
 
 /* Frozen Header Top Row */
-thead th {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background-color: #f4f6f8;
-    font-weight: 600;
-    color: #555;
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    border-bottom: 2px solid var(--border-color);
-}
+thead th { position: sticky; top: 0; z-index: 10; background-color: #f4f6f8; font-weight: 600; color: #555; text-transform: uppercase; font-size: 0.75rem; white-space: nowrap; border-bottom: 2px solid var(--border-color); }
 
-/* Frozen Checkbox Column (Column 1) */
-.col-Checkbox {
+/* Frozen Checkbox Column */
+.col-Checkbox { position: sticky; left: 0; z-index: 5; min-width: 40px; max-width: 40px; border-right: 1px solid #EAEAEA; vertical-align: middle;}
+
+/* Frozen Combined Media Column */
+.col-Media {
     position: sticky;
-    left: 0;
+    left: 40px; /* Pushed to the edge of the checkbox */
     z-index: 5;
-    min-width: 40px;
-    max-width: 40px;
-    border-right: 1px solid #EAEAEA;
+    min-width: 280px;
+    max-width: 280px;
+    border-right: 2px solid var(--accent-blue);
 }
 
-/* Frozen Vimeo Native Title Column (Column 2) */
-.col-NativeTitle {
-    position: sticky;
-    left: 40px; /* Pushed exactly to the edge of the checkbox */
-    z-index: 5;
-    min-width: 220px;
-    max-width: 220px;
-    border-right: 2px solid var(--accent-blue); /* Strong border to show it's frozen */
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
+/* Intersection Top-Left Corners */
+thead th.col-Checkbox, thead th.col-Media { z-index: 15; background-color: #f4f6f8; }
 
-/* Intersection of Frozen Header & Frozen Columns (Top-Left Corner) */
-thead th.col-Checkbox,
-thead th.col-NativeTitle {
-    z-index: 15; /* Highest level so it sits above everything when scrolling diagonally */
-    background-color: #f4f6f8;
-}
+/* Media Card Content */
+.media-card { display: flex; gap: 12px; align-items: flex-start; }
+.media-thumb { width: 80px; height: 45px; object-fit: cover; border-radius: 4px; background-color: #eee; flex-shrink: 0; }
+.media-details { display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.media-details strong { font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--dark-text); }
+.media-actions { display: flex; gap: 10px; align-items: center; }
+.manage-link { color: var(--accent-blue); text-decoration: none; font-weight: 600; font-size: 0.8rem; }
+.manage-link:hover { text-decoration: underline; }
 
 /* Hover States for Frozen Cells */
 tbody tr:hover td { background-color: #fafafa; }
-tbody tr:hover td.col-Checkbox,
-tbody tr:hover td.col-NativeTitle { background-color: #fafafa; }
+tbody tr:hover td.col-Checkbox, tbody tr:hover td.col-Media { background-color: #fafafa; }
 
 /* Standard Column Styling */
 [contenteditable="true"] { background-color: var(--editable-bg); border: 1px solid transparent; transition: border 0.2s; min-width: 130px; outline: none; }
 [contenteditable="true"]:focus { border: 1px solid var(--accent-blue); background-color: #fff; }
-.summary-cell { color: var(--accent-blue); text-decoration: underline; text-decoration-color: transparent; transition: text-decoration-color 0.2s; min-width: 150px; }
-.summary-cell:hover { text-decoration-color: var(--accent-blue); background-color: #f0f7ff; }
-.manage-link { color: var(--accent-blue); text-decoration: none; font-weight: 600; }
-.manage-link:hover { text-decoration: underline; }
+
+/* Plain text editable summary */
+.col-Summary { min-width: 280px; max-width: 350px; white-space: pre-wrap; /* Allows formatting & returns */ word-wrap: break-word; }
 
 /* Table Header Filters */
 .th-content { display: flex; justify-content: space-between; align-items: center; gap: 5px; }
@@ -146,18 +114,10 @@ tbody tr:hover td.col-NativeTitle { background-color: #fafafa; }
 /* --- Dynamic Column Hiding Rules --- */
 table.hide-col-Summary .col-Summary, table.hide-col-Title .col-Title, table.hide-col-Series .col-Series, table.hide-col-Date .col-Date, table.hide-col-Minister .col-Minister, table.hide-col-Scripture .col-Scripture, table.hide-col-SupportingScripture .col-SupportingScripture, table.hide-col-EventType .col-EventType, table.hide-col-Topic .col-Topic, table.hide-col-Features .col-Features, table.hide-col-Holiday .col-Holiday, table.hide-col-Location .col-Location, table.hide-col-Audience .col-Audience { display: none; }
 
-/* --- Floating Panels & Modals --- */
+/* --- Floating Panels --- */
 #table-filter-panel { position: absolute; background: white; border: 1px solid var(--border-color); box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 6px; width: 240px; z-index: 2000; display: flex; flex-direction: column; }
 .filter-panel-header { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border-color); font-weight: 700; font-size: 0.9rem; color: var(--accent-blue); }
 .filter-panel-body { max-height: 250px; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .filter-panel-body label { font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 8px; color: var(--dark-text); }
 .filter-panel-footer { display: flex; justify-content: space-between; padding: 10px; border-top: 1px solid var(--border-color); }
 .filter-panel-footer button { padding: 6px 12px; font-size: 0.8rem; }
-
-.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--modal-overlay); display: flex; justify-content: center; align-items: center; z-index: 3000; }
-.modal-content { background-color: white; border-radius: 8px; width: 90%; max-width: 800px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; }
-.modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
-.modal-header h2 { margin: 0; font-size: 1.25rem; }
-.modal-close { background: none; border: none; font-size: 2rem; font-weight: 300; cursor: pointer; color: #888; padding: 0; line-height: 1; }
-.modal-body { z-index: 1001; }
-.modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
